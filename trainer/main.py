@@ -126,6 +126,15 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str) -> None:
     conn = connect()
     init_db(conn)
 
+    # kitty 环境检查：刷题类模式依赖 kitty 真彩显示题目图片
+    if mode != "stats" and not _in_kitty():
+        console.print("[bold yellow]⚠ 当前不在 kitty 终端。[/bold yellow]")
+        console.print("[yellow]本工具面向 kitty 终端设计：题目图片靠 kitty 真彩内嵌\n"
+                      "(kitty +kitten icat) 来显示交通标志。其他终端看不到标志图，\n"
+                      "仅给出图片路径，做题体验不完整。建议用 kitty 终端运行。[/yellow]")
+        if mode == "exam" or not viewer or viewer == "auto":
+            console.print("[dim]继续运行（图片题仅提示本地路径）。[/dim]\n")
+
     # 统计模式
     if mode == "stats":
         show_stats(conn, subject)
