@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import shutil
 import sys
 from datetime import datetime, date
 from typing import Optional
@@ -21,7 +22,7 @@ from prompt_toolkit.key_binding import KeyBindings
 
 from trainer.main import run, Console  # noqa: F401
 from trainer.logger import get_logger
-from config import IMAGE_DIR
+from config import IMAGE_DIR, EXAM_DATE_FILE
 
 console = Console()
 log = get_logger("shell")
@@ -65,6 +66,11 @@ def _clear() -> None:
 def _show_banner() -> None:
     _clear()
     console.print(BANNER, style="bold cyan")
+
+    cl = _exam_countdown_line()          # 启动标题下方显示考试倒计时
+    if cl is not None:
+        console.print(cl)
+        console.print("[bold cyan]──────────────────────────────[/bold cyan]")
 
     console.print("[bold]在底部输入命令开始刷题[/bold] "
                   "(Tab/方向键 补全，输入 'help' 查看全部命令)\n")
@@ -226,35 +232,75 @@ def _big_num(n: int) -> list[str]:
     return lines
 
 
+def _load_exam_date():
+    """读取持久化的考试日期；无效/无则返回 None。"""
+    try:
+        s = EXAM_DATE_FILE.read_text(encoding="utf-8").strip()
+        return datetime.strptime(s, "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def _save_exam_date(date_str: str) -> None:
+    try:
+        EXAM_DATE_FILE.parent.mkdir(exist_ok=True)
+        EXAM_DATE_FILE.write_text(date_str, encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _exam_countdown_line():
+    """生成启动标题下方的紧凑倒计时行(数字黄色粗体突出)；无显示返回 None。"""
+    d = _load_exam_date()
+    if not d or d <= date.today():
+        return None
+    days = (d - date.today()).days
+    from rich.text import Text as _T
+    t = _T()
+    t.append("  🗓  距离考试还有 ", style="bold")
+    t.append(str(days), style="bold yellow")
+    t.append(" 天", style="bold")
+    t.append(f"  （考试日 {d.isoformat()}）", style="dim")
+    return t
+
+
+def _countdown_text(days: int, date_str: str | None = None):
+    """生成倒计时渲染对象（rich Text，分段着色，避免 markup 配对问题）。
+
+    date_str 为 None 时不附日期行（供启动标题下方用）。
+    """
+    from rich.text import Text as _T
+    bw = max(30, shutil.get_terminal_size().columns or 80)
+
+    text = _T()
+    text.append("\n")
+    text.append("═" * min(bw, 56) + "\n\n", style="bold cyan")
+    text.append("距 离 考 试 还 有\n\n", style="bold")
+    # 大字数字（居中，黄底白字粗体突出）
+    big = _big_num(days)
+    for row in big:
+        pad = max(0, (bw - len(row)) // 2)
+        cell = row.ljust(24)
+        text.append(" " * pad)
+        text.append(f"  {cell}  ", style="bold white on yellow")
+        text.append("\n")
+    text.append("\n")
+    if date_str:
+        text.append(f"  考试日期：{date_str}  ·  剩余 {days} 天\n", style="cyan")
+        text.append("＝" * min(bw, 56) + "\n", style="bold cyan")
+    return text
+
+
 def _show_countdown(date_str: str) -> None:
-    """清屏居中显示倒计时大字，按键后返回。"""
-    import shutil as _sh
+    """清屏居中显示倒计时大字，按键后返回（edata 命令）。"""
     from datetime import datetime as _dt
     target = _dt.strptime(date_str, "%Y-%m-%d").date()
     days = (target - date.today()).days
 
     _clear()
-    bw = max(30, _sh.get_terminal_size().columns or 80)
-
-    lines: list[str] = []
-    lines.append("")
-    lines.append("═" * min(bw, 60))
-    lines.append("")
-    lines.append("    距 离 考 试 还 有")
-    lines.append("")
-    # 大字数字（居中，黄底突出）
-    big = _big_num(days)
-    for row in big:
-        pad = max(0, (bw - len(row)) // 2)
-        lines.append(" " * pad + f"[bold on yellow] {row.ljust(20)} [/bold]")
-    lines.append("")
-    lines.append(f"       考试日期：{date_str}  ·  倒计时 {days} 天")
-    lines.append("")
-    lines.append("═" * min(bw, 60))
-    lines.append("")
-    lines.append("按任意键返回命令界面…")
-
-    console.print("\n".join(lines), justify="center")
+    t = _countdown_text(days, date_str)
+    t.append("\n按任意键返回命令界面…", style="dim")
+    console.print(t)
 
     # 等待按键返回
     try:
@@ -312,7 +358,9 @@ def run_shell() -> None:
             console.print("[bold green]✋ 再见，刷题愉快！[/bold green]")
             break
         if action == "__edata__":
-            _show_countdown(subject or "")
+            ds = subject or ""
+            _save_exam_date(ds)               # 持久化考试日期，启动时在标题下显示
+            _show_countdown(ds)
             _show_banner()
             continue
         if action == "__edata_err__":

@@ -13,6 +13,7 @@ IMAGE_CACHE_DIR = DATA_DIR / "images_cache"  # 放大后图片缓存
 LOGS_DIR = DATA_DIR / "logs"              # 运行日志
 DB_PATH = DATA_DIR / "questions.db"        # 题库数据库
 LOG_FILE = LOGS_DIR / "drive_practice.log" # 应用运行日志
+EXAM_DATE_FILE = DATA_DIR / "exam_date"    # 考试日期(edata 设置,启动显示倒计时)
 
 
 def ensure_dirs() -> None:

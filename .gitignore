@@ -10,6 +10,8 @@ data/*
 
 # 放大图片缓存（运行时生成，不提交）
 data/images_cache/
+data/logs/
+data/exam_date
 
 # 本地会话 / 原始缓存（不上传，含个人敏感信息）
 data/browser_profile/
