@@ -288,12 +288,35 @@ def run_exam(conn, subject=None, count=None, viewer="auto") -> None:
     for q, a in answers:
         _record(conn, q, 1 if a == q["answer"] else 0, "exam")
     pct = (correct / total * 100) if total else 0
+    wrong = total - correct
+    # 分册错题统计（对应正式考试"每册错 ≤ 2"标准）
+    book_wrong: dict[str, int] = {}
+    for q, a in answers:
+        if a != q["answer"]:
+            book_wrong[q["subject"]] = book_wrong.get(q["subject"], 0) + 1
+    over_book = {s: c for s, c in book_wrong.items() if c > 2}
     log.info("模拟考结束 subject=%r 作答=%d 答对=%d 正确率=%.0f%%", subject, total, correct, pct)
-    console.print(Panel(
-        f"[bold]交卷[/bold] · 作答 {total}/{n} 題 · 用時 {int(elapsed//60)}分{int(elapsed%60)}秒\n"
-        f"[bold]答對 {correct} 題，正確率 {pct:.0f}%[/bold]"
-        + (f"\n[dim]及格線 85%（參考正式考試）[/dim]" if pct < 85 else "\n[green]達到 85% 合格線 👍[/green]"),
-        border_style="green" if pct >= 85 else "red"))
+
+    # 及格判断：总错 ≤ 8（正确率 ≥ 84%，约按正式 50 题）且每册错 ≤ 2
+    pass_total = wrong <= 8 and pct >= 84
+    pass_book = len(over_book) == 0
+    passed = pass_total and pass_book
+    lines = [
+        f"[bold]交卷[/bold] · 作答 {total}/{n} 題 · 用時 {int(elapsed//60)}分{int(elapsed%60)}秒\n",
+        f"[bold]答對 {correct} 題，正確率 {pct:.0f}%[/bold]",
+    ]
+    if book_wrong:
+        subj_txt = "  ".join(f"{s}錯{c}" for s, c in sorted(book_wrong.items()))
+        lines.append(f"[dim]分冊錯題：{subj_txt}[/dim]")
+    if passed:
+        lines.append("\n[green]達到及格標準（總錯≤8 且每冊≤2）👍[/green]")
+    else:
+        if not pass_total:
+            lines.append(f"\n[dim]未達：總錯 {wrong} 題，正式標準需 ≤8 題（正確率≥84%）[/dim]")
+        if over_book:
+            lines.append(f"[dim]超冊：{'、'.join(f'{s}錯{c}（限≤2）' for s, c in over_book.items())}[/dim]")
+    console.print(Panel("\n".join(lines),
+                        border_style="green" if passed else "red"))
 
 
 def show_stats(conn, subject=None) -> None:
