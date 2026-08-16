@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime, date
 from typing import Optional
 
 from prompt_toolkit import prompt
@@ -43,6 +44,7 @@ COMMANDS = [
     "learn book 1 1", "learn book 1 5",
     # 其他
     "help", "clear", "quit",
+    "edata 2026-08-18",
 ]
 
 BANNER = r"""
@@ -91,12 +93,24 @@ def _get_modes_help() -> str:
   help                    显示帮助
   clear                   重显标题
   quit                    退出程序
+  edata 2026-08-18        考试倒计时：输入未来日期，大字显示剩余天数
 """
 
 
 def _make_completer() -> FuzzyCompleter:
     return FuzzyCompleter(WordCompleter(COMMANDS, ignore_case=True,
                                         match_middle=True))
+
+
+def _parse_date(s: str):
+    """解析 YYYY-MM-DD 且须为未来日期(>今天)；否则返回 None。"""
+    try:
+        d = datetime.strptime(s.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    if d <= date.today():
+        return None
+    return d
 
 
 def _parse_command(raw: str):
@@ -106,6 +120,15 @@ def _parse_command(raw: str):
         return None
     parts = raw.split()
     cmd0 = parts[0].lower()
+
+    # edata：倒计时命令 edata YYYY-MM-DD（要求未来日期）
+    if cmd0 == "edata":
+        if len(parts) >= 2:
+            d = _parse_date(parts[1])
+            if d:
+                return ("__edata__", parts[1], None, None)
+            return ("__edata_err__", "日期格式应为 YYYY-MM-DD，且需大于今天（如 2026-08-18）", None, None)
+        return ("__edata_err__", "用法：edata YYYY-MM-DD（如 edata 2026-08-18）", None, None)
 
     # 答题/学习：practice/learn book <册> [题号]（不能先做 count 提取，会误吞题号）
     if cmd0 in ("practice", "learn"):
@@ -174,6 +197,79 @@ def _normalize_book(s: str) -> Optional[str]:
     return None
 
 
+# ---------- 倒计时 edata ----------
+
+_BIG_DIGITS = {
+    "0": ["███", "█ █", "█ █", "█ █", "███"],
+    "1": [" █ ", "██ ", " █ ", " █ ", "███"],
+    "2": ["███", "  █", "███", "█  ", "███"],
+    "3": ["███", "  █", "███", "  █", "███"],
+    "4": ["█ █", "█ █", "███", "  █", "  █"],
+    "5": ["███", "█  ", "███", "  █", "███"],
+    "6": ["███", "█  ", "███", "█ █", "███"],
+    "7": ["███", "  █", "  █", "  █", "  █"],
+    "8": ["███", "█ █", "███", "█ █", "███"],
+    "9": ["███", "█ █", "███", "  █", "███"],
+}
+
+
+def _big_num(n: int) -> list[str]:
+    """把天数渲染成 5 行块状大字，返回行列表。"""
+    s = str(max(0, n))
+    lines = ["" for _ in range(5)]
+    for i, ch in enumerate(s):
+        d = _BIG_DIGITS.get(ch)
+        if not d:
+            continue
+        for r in range(5):
+            lines[r] += d[r] + "  "      # 数字间隔
+    return lines
+
+
+def _show_countdown(date_str: str) -> None:
+    """清屏居中显示倒计时大字，按键后返回。"""
+    import shutil as _sh
+    from datetime import datetime as _dt
+    target = _dt.strptime(date_str, "%Y-%m-%d").date()
+    days = (target - date.today()).days
+
+    _clear()
+    bw = max(30, _sh.get_terminal_size().columns or 80)
+
+    lines: list[str] = []
+    lines.append("")
+    lines.append("═" * min(bw, 60))
+    lines.append("")
+    lines.append("    距 离 考 试 还 有")
+    lines.append("")
+    # 大字数字（居中，黄底突出）
+    big = _big_num(days)
+    for row in big:
+        pad = max(0, (bw - len(row)) // 2)
+        lines.append(" " * pad + f"[bold on yellow] {row.ljust(20)} [/bold]")
+    lines.append("")
+    lines.append(f"       考试日期：{date_str}  ·  倒计时 {days} 天")
+    lines.append("")
+    lines.append("═" * min(bw, 60))
+    lines.append("")
+    lines.append("按任意键返回命令界面…")
+
+    console.print("\n".join(lines), justify="center")
+
+    # 等待按键返回
+    try:
+        import termios, tty
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        tty.setcbreak(fd)
+        raw = sys.stdin.read(1)
+        if raw == "\x1b":
+            sys.stdin.read(2)
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    except Exception:
+        input()
+
+
 def run_shell() -> None:
     """启动交互式命令界面。"""
     log.info("MDrivePractice 命令界面启动")
@@ -215,6 +311,13 @@ def run_shell() -> None:
         if action == "__quit__":
             console.print("[bold green]✋ 再见，刷题愉快！[/bold green]")
             break
+        if action == "__edata__":
+            _show_countdown(subject or "")
+            _show_banner()
+            continue
+        if action == "__edata_err__":
+            console.print(f"[yellow]{subject}[/yellow]")
+            continue
 
         # stats 简单输出：不清屏、直接空一行显示统计，保留命令界面上下文
         if action == "stats":
