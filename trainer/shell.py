@@ -1,6 +1,6 @@
 """MDrivePractice 交互式命令界面（类 Hermes 全屏 TUI）。
 
-启动后清屏显示标题，底部输入框可输入命令（fuzzy 下拉补全），
+启动后清屏显示标题，底部输入框可输入命令（两级补全：先主命令，主命令 + 空格后再 Tab 补子选项），
 输入命令进入对应练习模式，完成后返回此界面。
 
 用法：
@@ -15,10 +15,9 @@ from datetime import datetime, date
 from typing import Optional
 
 from prompt_toolkit import prompt
-from prompt_toolkit.completion import FuzzyCompleter, WordCompleter
+from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import InMemoryHistory
-from prompt_toolkit.key_binding import KeyBindings
 
 from trainer.main import run, Console  # noqa: F401
 from trainer.logger import get_logger
@@ -27,26 +26,19 @@ from config import IMAGE_DIR, EXAM_DATE_FILE
 console = Console()
 log = get_logger("shell")
 
-# 命令集（含常用的中文别名和选项，用于 fuzzy 补全）
-COMMANDS = [
-    # 模式命令（仅英文）
-    "start",
-    "random",
-    "exam",
-    "wrong",
-    "stats",
-    # 答题练习（原 book）：practice book <册> [题号]
-    "practice book 1", "practice book 2", "practice book 3",
-    "practice book 4", "practice book 5",
-    "practice book 1 1", "practice book 1 5",
-    # 学习浏览：learn book <册> [题号]
-    "learn book 1", "learn book 2", "learn book 3",
-    "learn book 4", "learn book 5",
-    "learn book 1 1", "learn book 1 5",
-    # 其他
-    "help", "clear", "quit",
-    "edata 2026-08-18",
+# 主命令（仅英文）
+MAIN_COMMANDS = [
+    "start", "random", "wrong", "exam", "stats",
+    "practice", "learn",
+    "help", "clear", "quit", "edata",
 ]
+
+# 子选项：主命令 + 空格 后再 Tab 可补全的参数
+SUB_OPTIONS = {
+    "practice": ["book 1", "book 2", "book 3", "book 4", "book 5"],
+    "learn":    ["book 1", "book 2", "book 3", "book 4", "book 5"],
+    "edata":    ["<2026-12-31>"],
+}
 
 BANNER = r"""
   __  __   _____     _            _      _____                     _       _
@@ -73,7 +65,7 @@ def _show_banner() -> None:
         console.print("[bold cyan]──────────────────────────────[/bold cyan]")
 
     console.print("[bold]在底部输入命令开始刷题[/bold] "
-                  "(Tab/方向键 补全，输入 'help' 查看全部命令)\n")
+                  "(输入主命令后按空格再 Tab 补子选项，help 查看全部命令)\n")
 
 
 def _get_modes_help() -> str:
@@ -103,9 +95,37 @@ def _get_modes_help() -> str:
 """
 
 
-def _make_completer() -> FuzzyCompleter:
-    return FuzzyCompleter(WordCompleter(COMMANDS, ignore_case=True,
-                                        match_middle=True))
+class _TwoLevelCompleter(Completer):
+    """两级补全：先补主命令，主命令 + 空格后再补子选项。"""
+
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        parts = text.split()
+        word = parts[-1] if parts else ""
+        # 已输入主命令 + 空格 → 补该命令的子选项
+        if parts:
+            main = parts[0].lower()
+            if len(parts) >= 2 or text.endswith(" "):
+                subs = SUB_OPTIONS.get(main)
+                if subs:
+                    for s in subs:
+                        yield Completion(s, start_position=-len(word))
+                    return
+        # 否则补主命令（前缀匹配）
+        for c in sort_main():
+            if c.startswith(word):
+                yield Completion(c, start_position=-len(word))
+
+
+def sort_main() -> list[str]:
+    """主命令排序：练习模式在前，其余按字母序。"""
+    return sorted(MAIN_COMMANDS,
+                  key=lambda x: (0 if x in ("start", "random", "wrong",
+                                            "exam", "stats") else 1, x))
+
+
+def _make_completer() -> Completer:
+    return _TwoLevelCompleter()
 
 
 def _parse_date(s: str):
