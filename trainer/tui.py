@@ -15,11 +15,11 @@ from pathlib import Path
 
 from config import ROOT
 
-DISPLAY_H = 40          # 内容区总高（估算）
+DISPLAY_H = 60          # 内容区总高（估算）
 
-# 图片
-IMG_H = 18            # 图片渲染高度（字符行）
-IMG_W = 42            # 图片渲染宽度（字符）
+# 图片（加大）
+IMG_H = 24            # 图片渲染高度（字符行）
+IMG_W = 56            # 图片渲染宽度（字符）
 
 # ANSI
 _C = "\x1b["
@@ -167,47 +167,36 @@ def run_question(q, exam: bool = False) -> dict:
         return result
 
     tw = _term_width()
-    box_w = min(50, tw - 8)          # 题目/选项框内容宽
+    ROW_GAP = 1                     # 选项项之间的空行数（行距）
+    box_w = tw                      # 横线占满整行
+    txt_w = tw - 2                  # 文本区宽度（略留边）
     correct = q["answer"] or ""
     _, stem = _split_img(q["stem"])
 
     # 布局位置记录
     # 图片区: 1..IMG_H
-    # 题目框: 从 TITLE_TOP 开始, 高度 3 (上框|题干+标题|下框)  -- 简化合并
     TITLE_TOP = IMG_H + 2
-    # 选项框起始行
-    OPT_TOP = TITLE_TOP + 4
-    opt_rows = {}   # letter -> 行号(选项框内首行)
-    FEEDBACK_ROW = OPT_TOP + len(letters) + 3
-    HELP_ROW = FEEDBACK_ROW + 2
-
-    # 全清, 渲染图片(居中,一次)
-    _clear_scr()
-    if img and _in_kitty():
-        _render_img_centered(img)
 
     def draw_frames():
-        """画题目框+选项框+帮助(只画一次)。返回每个选项的行号。"""
-        # 题目框（标题+题干+下框）-- 合并: 上框 | 标题+题干 | 下框
+        """画题目横线+选项横线（横线满宽）。返回每个选项的行号。"""
+        # 题目区：横线 | 标题 | 题干 | 空行 (行距)
         _erase_from(TITLE_TOP)
-        _draw_at(TITLE_TOP, _top_border(box_w))
-        _draw_at(TITLE_TOP+1, _mid_line(f"{_TTL}{q['subject']} · {q['source_id']}{_RST}", box_w))
-        _draw_at(TITLE_TOP+2, _mid_line(stem, box_w))
-        _draw_at(TITLE_TOP+3, _bottom_border(box_w))
+        opt_top = TITLE_TOP + 4              # 题目区之后（标题2行+空行）
+        _draw_at(TITLE_TOP,     _sep(tw))
+        _draw_at(TITLE_TOP+1,   _mid_line(f"{_TTL}{q['subject']} · {q['source_id']}{_RST}", txt_w))
+        _draw_at(TITLE_TOP+2,   _mid_line(stem, txt_w))
+        _draw_at(TITLE_TOP+3,   _sep(tw))
 
-        # 选项框
-        _draw_at(OPT_TOP, _top_border(box_w))
+        # 选项区：每个选项(含空行)
         rowa = {}
         for idx, ch in enumerate(letters):
-            rr = OPT_TOP + 1 + idx
+            rr = opt_top + idx * (1 + ROW_GAP)   # 每项隔 ROW_GAP 行
             rowa[ch] = rr
         for idx, ch in enumerate(letters):
-            _draw_at(OPT_TOP+1+idx, _opt_line(idx, None))
-        _draw_at(OPT_TOP+len(letters)+1, _bottom_border(box_w))
-        return rowa, OPT_TOP + len(letters) + 2   # 返回选项行映射和框底后行
-
-    FEEDBACK_ROW = OPT_TOP + len(letters) + 3
-    HELP_ROW = FEEDBACK_ROW + 2
+            _draw_at(rowa[ch], _opt_line(idx, None))
+        opt_bottom = opt_top + (len(letters)-1) * (1 + ROW_GAP) + 1
+        _draw_at(opt_bottom, _sep(tw))
+        return rowa, opt_bottom + 1
 
     def _opt_line(idx: int, tone) -> str:
         """生成一个选项行：纯文本，选中/对错加底纹，无竖线。tone: sel/ok/err/gray/None。"""
@@ -223,7 +212,7 @@ def run_question(q, exam: bool = False) -> dict:
         elif tone == "gray":
             cell = _GRAY
         # 补足宽度（可见宽），覆盖选中底纹残留
-        return _pad(f"{cell if cell else ''}{ch}. {txt}{_RST}", box_w)
+        return _pad(f"{cell if cell else ''}{ch}. {txt}{_RST}", txt_w)
 
     # ---- 状态 ----
     sel = 0
@@ -231,8 +220,16 @@ def run_question(q, exam: bool = False) -> dict:
     final_correct = False
     first_wrong = False
 
-    rowa, _after_opt = draw_frames()
-    # 给初始选中项上高亮
+    _clear_scr()
+    if img and _in_kitty():
+        _render_img_centered(img)
+
+    rowa, after_opt = draw_frames()
+    # 反馈/帮助行（选项区之后）
+    FEEDBACK_ROW = after_opt + 1
+    HELP_ROW = FEEDBACK_ROW + 1 + 0   # 帮助紧接反馈
+
+    # 初始高亮
     _draw_at(rowa[letters[sel]], _opt_line(sel, "sel"))
 
     def fmt_feedback() -> str:
