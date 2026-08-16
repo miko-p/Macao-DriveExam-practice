@@ -209,6 +209,13 @@ def run_shell() -> None:
             console.print("[bold green]✋ 再见，刷题愉快！[/bold green]")
             break
 
+        # stats 简单输出：不清屏、直接空一行显示统计，保留命令界面上下文
+        if action == "stats":
+            console.print("")
+            run(subject=None, mode="stats", count=None, viewer="auto")
+            console.print("")
+            continue
+
         # 进入模式：先清屏
         _clear()
         try:
@@ -216,9 +223,7 @@ def run_shell() -> None:
                 start_qid=start_qid, viewer="auto")
         except SystemExit:
             pass
-        # 刷题结束返回命令界面。stats 只输出一次结果，保留统计画面(不清屏重显)
-        if action == "stats":
-            continue
+        # 刷题结束返回命令界面
         console.print("\n[bold cyan]┌──────────────────────────────────┐[/bold cyan]")
         console.print("[bold cyan]│ 已完成本次练习，返回命令界面     │[/bold cyan]")
         console.print("[bold cyan]└──────────────────────────────────┘[/bold cyan]")
