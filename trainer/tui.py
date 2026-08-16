@@ -247,11 +247,12 @@ def run_question(q, exam: bool = False, learn: bool = False, last: bool = False)
 
     # 动态图片高度：确保整页(图片+题目区+选项区+底部空行+反馈/帮助)不超过终端高度
     #  题目区 4 行 | 选项区(选项+项间空行+底部空1行+横线) | 反馈1 + 帮助1
+    IMG_GAP = 3                      # 图片底部与题目横线之间的间隔（留白, 避免压线）
     opt_block = (len(letters) - 1) * (1 + ROW_GAP) + 2   # 选项本身 + 底部空1行 + 最后横线
-    fixed_rows = 4 + 1 + opt_block + 2                    # 题目区4 + 图片后1空行 + 选项块 + 反馈/帮助
+    fixed_rows = 4 + IMG_GAP + opt_block + 2             # 题目区4 + 图片间隔 + 选项块 + 反馈/帮助
     eff_img_h = max(4, min(IMG_H, th - fixed_rows - 1))
-    # 布局位置记录（整体紧贴图片下方）
-    TITLE_TOP = eff_img_h + 1
+    # 布局位置记录
+    TITLE_TOP = eff_img_h + IMG_GAP
 
     def draw_frames():
         """画题目横线+选项横线（横线满宽）。返回每个选项的行号。"""
