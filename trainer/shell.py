@@ -216,7 +216,9 @@ def run_shell() -> None:
                 start_qid=start_qid, viewer="auto")
         except SystemExit:
             pass
-        # 刷题结束返回命令界面
+        # 刷题结束返回命令界面。stats 只输出一次结果，保留统计画面(不清屏重显)
+        if action == "stats":
+            continue
         console.print("\n[bold cyan]┌──────────────────────────────────┐[/bold cyan]")
         console.print("[bold cyan]│ 已完成本次练习，返回命令界面     │[/bold cyan]")
         console.print("[bold cyan]└──────────────────────────────────┘[/bold cyan]")
