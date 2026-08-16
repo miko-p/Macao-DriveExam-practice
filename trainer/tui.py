@@ -15,10 +15,11 @@ from pathlib import Path
 
 from config import ROOT
 
-DISPLAY_H = 30          # 内容区总高（题目+选项框架高度估算，容纳最多选项）
+DISPLAY_H = 40          # 内容区总高（估算）
 
 # 图片
-IMG_H = 12            # 图片渲染高度（字符行）
+IMG_H = 18            # 图片渲染高度（字符行）
+IMG_W = 42            # 图片渲染宽度（字符）
 
 # ANSI
 _C = "\x1b["
@@ -72,7 +73,6 @@ def _render_img_centered(path: str) -> None:
     if not path or not Path(path).exists():
         return
     tw = _term_width()
-    IMG_W = 26                     # 图片渲染宽度（字符）
     left = max(1, (tw - IMG_W) // 2)   # 水平居中
     try:
         subprocess.run(
@@ -95,18 +95,24 @@ def _pad(t: str, w: int) -> str:
     return t + " " * max(0, d)
 
 
-# ---------- 边框/行 ----------
+# ---------- 边框/行（只用横线分隔，无竖线） ----------
+
+def _sep(width: int, ch: str = "─") -> str:
+    """一条横线分隔线。"""
+    return f"{_C}36m{ch * width}{_RST}"
+
 
 def _top_border(width: int) -> str:
-    return f"{_FRAME}┌{'─'*width}┐{_RST}"
+    return _sep(width)
 
 
 def _mid_line(text: str, width: int) -> str:
-    return f"{_FRAME}│{_RST}{_pad(text, width)}{_FRAME}│{_RST}"
+    # 无竖线，纯文本（按可见宽补右空格）
+    return _pad(text, width)
 
 
 def _bottom_border(width: int) -> str:
-    return f"{_FRAME}└{'─'*width}┘{_RST}"
+    return _sep(width)
 
 
 def _draw_at(row: int, text: str, col: int = 0) -> None:
@@ -204,7 +210,7 @@ def run_question(q, exam: bool = False) -> dict:
     HELP_ROW = FEEDBACK_ROW + 2
 
     def _opt_line(idx: int, tone) -> str:
-        """生成一个选项行：带边框 + 内容高亮。tone: 'sel'/'ok'/'err'/'gray'/None。"""
+        """生成一个选项行：纯文本，选中/对错加底纹，无竖线。tone: sel/ok/err/gray/None。"""
         ch = letters[idx]
         txt = choices[ch]
         cell = None
@@ -216,8 +222,8 @@ def run_question(q, exam: bool = False) -> dict:
             cell = _ERRBG
         elif tone == "gray":
             cell = _GRAY
-        inner = f"{cell if cell else ''}{ch}. {txt}{_RST}"
-        return f"{_FRAME}│{_RST}{_pad(inner, box_w)}{_FRAME}│{_RST}"
+        # 补足宽度（可见宽），覆盖选中底纹残留
+        return _pad(f"{cell if cell else ''}{ch}. {txt}{_RST}", box_w)
 
     # ---- 状态 ----
     sel = 0
