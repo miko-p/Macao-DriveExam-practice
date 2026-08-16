@@ -17,31 +17,42 @@
 | | |
 |---|---|
 | 📚 **內建題庫** | 五冊（第一冊~第五冊）647 題，按冊分類 |
-| 🖼️ **彩圖顯示** | 交通標誌圖在終端機內嵌顯示（kitty 終端機） |
+| 🖼️ **圖片顯示** | 交通標誌圖以 chafa 半塊畫內嵌於題目右側（任何 256 色終端） |
 | 🎯 **多種模式** | 循序 / 隨機 / 章節 / 錯題重練 |
 | 📝 **模擬考試** | 隨機抽題、統一交卷、85% 及格線提示 |
 | 📊 **成績統計** | 整體與分章節正確率、錯題本 |
+| ⌨️ **互動體驗** | 上下箭頭選擇、圖片與題目並排、答錯可重答
+一次 |
 | ⚡ **全離線** | 資料在本地，無網路依賴 |
 
 ## ⚠️ 終端機要求
 
-本工具面向 **kitty 終端機** 設計：題目圖片依靠 kitty 的 `icat` 協定在終端機內嵌**彩圖顯示**，這樣才能看清交通標誌。
+在任何支援 ANSI 色彩的終端機（kitty / alacritty / GNOME Terminal 等）皆可使用。
+題目圖片用 **chafa** 渲染成半塊字符畫，內嵌於選項右側，無需網頁查看。
 
-- **kitty 終端機**：完整體驗（標誌圖彩圖內嵌）。
-- 其他終端機：可以執行，但圖片題只能看到本地路徑提示，**作答體驗不完整**。
+需安裝 `chafa`：
+
+```bash
+# Arch/Manjaro (CachyOS 等)
+sudo pacman -S chafa
+# Debian/Ubuntu
+sudo apt install chafa
+# macOS
+brew install chafa
+```
 
 ## 📦 安裝
 
 需要 Python 3.10+。
 
 ```bash
-# 於 kitty 終端機執行
+# 於任一終端機執行
 python3 -m venv .venv
 source .venv/bin/activate.fish        # bash: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> 依賴：`rich`（介面）、`click`（命令列）、`prompt_toolkit`（互動命令介面），無瀏覽器/網路依賴。
+> 依賴：`rich`（介面）、`click`（命令列）、`prompt_toolkit`（互動介面）；系統需 `chafa`（圖片渲染）。
 
 ## 🚀 使用
 
@@ -79,28 +90,24 @@ python -m trainer.main --subject 第一冊         # 只練第一冊
 python -m trainer.main --mode stats             # 成績統計
 ```
 
-### 作答鍵
+### 作答交互（訓練模式）
+
+進入模式後，每題以全螢幕一頁呈現：**題目與選項在左，交通標誌圖在右**（chafa 半塊畫）。
 
 | 按鍵 | 作用 |
 |------|------|
-| `A` / `B` / `C` / `D` | 作答，即時顯示對錯與正確答案 |
-| `s` | 跳過（計入錯題） |
-| `q` / `quit` | 離開，進度自動儲存 |
+| `↑` / `↓` | 上下移動選擇選項 |
+| `Enter` | 確認作答 |
+| `q` | 退出 |
 
-### 圖片題顯示
+錯題處理：**答錯時顯示「答錯」並給一次重答機會**（正確答案會高亮），再答錯才進入下一題。
 
-預設 `--view-image auto`：在 **kitty 終端機** 自動用 `icat` 彩圖內嵌顯示標誌圖。
-也可以：
-
-```bash
-python -m trainer.main --mode random --view-image ascii   # img2txt ASCII 圖
-python -m trainer.main --view-image viu                    # 外接檢視器
-```
+模擬考（`exam`）模式：作答後**不顯示對錯、不重答**，交卷統一批改看總分。
 
 ## 🧱 目錄結構
 
 ```
-trainer/    互動練習端（shell.py 命令介面 + main.py 刷題核心）
+trainer/    互動練習端（shell.py 命令介面 + tui.py 全螢幕刷題 + main.py 核心）
 database/   SQLite 資料存取層（schema.sql + store.py）
 data/       題庫 questions.db + 題目圖片 images/（隨專案發佈）
 doc/        進度文件

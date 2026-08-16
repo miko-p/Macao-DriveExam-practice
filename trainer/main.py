@@ -37,6 +37,7 @@ from config import ROOT
 from database.store import (connect, init_db, get_questions_with_stats,
                             get_wrong_questions, overall_stats,
                             stats_by_subject, subjects)
+from trainer.tui import run_question
 
 console = Console()
 
@@ -175,45 +176,18 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str) -> None:
 
     console.print(f"[bold]开始练习[/bold] · {len(questions)} 题 · 模式 {mode}"
                   + (f" · {subject}" if subject else ""))
-    console.print("[dim]输入 A/B/C/D 作答，q/quit 退出，s 跳过[/dim]\n")
+    console.print("[dim]↑↓ 选择选项 · Enter 确认 · q 退出 · 答错可重答一次[/dim]\n")
 
     correct = 0
     try:
         for q in questions:
-            import json
-            _print_question(q)
-            img, _ = _split_img(q["stem"])
-            if img and viewer:
-                _show_image(img, viewer)
-            ans = None
-            while True:
-                try:
-                    ans = click.prompt("回答", default="", show_default=False,
-                                       type=str).strip().upper()
-                except (EOFError, KeyboardInterrupt):
-                    console.print("\n[dim]已退出[/dim]")
-                    conn.close()
-                    return
-                if ans in ("Q", "QUIT"):
-                    console.print("已退出")
-                    conn.close()
-                    return
-                if ans == "S":
-                    _record(conn, q, 0, mode)
-                    console.print(f"[yellow]跳过。答案: {q['answer']}[/yellow]")
-                    break
-                if ans in ("A", "B", "C", "D", "E"):
-                    break
-                console.print("[red]请输入 A/B/C/D[/red]")
-            if ans in ("A", "B", "C", "D", "E"):
-                if ans == q["answer"]:
-                    correct += 1
-                    _record(conn, q, 1, mode)
-                    console.print("[bold green]✓ 正确[/bold green]")
-                else:
-                    _record(conn, q, 0, mode)
-                    console.print(f"[bold red]✗ 错误[/bold red] 答案: [green]{q['answer']}[/green]")
-            console.print()
+            res = run_question(q)                  # 全屏箭头选择（含错题重答）
+            if res["quit"]:
+                console.print("\n[dim]已退出练习[/dim]")
+                break
+            ok = 1 if res["correct"] else 0
+            _record(conn, q, ok, mode)
+            correct += ok
     except KeyboardInterrupt:
         console.print("\n[dim]中断中止[/dim]")
 
@@ -240,38 +214,16 @@ def run_exam(conn, subject=None, count=None, viewer="auto") -> None:
                         f"{' · '+subject if subject else ''}\n"
                         "[dim]作答后不提示对错，交卷统一批改。[/dim]",
                         border_style="magenta"))
-    console.print("[dim]输入 A/B/C/D 作答，q/quit 提前交卷，计分就绪。[/dim]\n")
+    console.print("[dim]↑↓ 选择选项 · Enter 确认 · q 交卷 · 作答不显示答案[/dim]\n")
     answers: list[tuple] = []
     start = time.time()
     try:
         for q in questions:
-            img, _ = _split_img(q["stem"])
-            if img:
-                _show_image(img, viewer)
-            # 显示题干+选项（不显示答案）
-            import json
-            lines = [f"[bold]{_split_img(q['stem'])[1]}[/bold]"]
-            if img:
-                lines.append(f"[dim](图片: {img})[/dim]")
-            lines.append("")
-            for ch, txt in json.loads(q["choices"]).items():
-                lines.append(f"  [bold]{ch}.[/bold] {txt}")
-            console.print(Panel("\n".join(lines), title=f"{q['subject']} · {q['source_id']}",
-                                title_align="left", border_style="magenta"))
-            while True:
-                try:
-                    a = click.prompt("作答", default="", show_default=False,
-                                     type=str).strip().upper()
-                except (EOFError, KeyboardInterrupt):
-                    a = "Q"
-                if a == "Q":
-                    break
-                if a in ("A", "B", "C", "D", "E"):
-                    answers.append((q, a))
-                    break
-                console.print("[red]请输入 A/B/C/D[/red]")
-            if a == "Q":
+            res = run_question(q, exam=True)     # 全屏箭头选择，不显示答案
+            if res["quit"]:
+                console.print("[dim]提前交卷[/dim]")
                 break
+            answers.append((q, res["choice"]))
     except KeyboardInterrupt:
         console.print("\n[dim]模拟考中断，按已答部分批改[/dim]")
 

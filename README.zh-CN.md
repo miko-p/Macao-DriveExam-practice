@@ -17,31 +17,41 @@
 | | |
 |---|---|
 | 📚 **内置题库** | 五册（第一冊~第五冊）647 题，按册分类 |
-| 🖼️ **真彩图片** | 交通标志图在终端内嵌显示（kitty 终端） |
+| 🖼️ **图片显示** | 交通标志图以 chafa 半块画内嵌于题目右侧（任何 256 色终端） |
 | 🎯 **多种模式** | 顺序 / 随机 / 章节 / 错题重练 |
 | 📝 **模拟考试** | 随机抽题、统一交卷、85% 及格线提示 |
 | 📊 **成绩统计** | 整体与分章节正确率、错题本 |
+| ⌨️ **交互体验** | 上下箭头选择、图片与题目并排、答错可重答一次 |
 | ⚡ **全离线** | 数据在本地，无网络依赖 |
 
 ## ⚠️ 终端要求
 
-本工具面向 **kitty 终端** 设计：题目图片依靠 kitty 的 `icat` 协议在终端内嵌**真彩显示**，这样才能看清交通标志。
+在任何支持 ANSI 色彩的终端（kitty / alacritty / GNOME Terminal 等）皆可使用。
+题目图片用 **chafa** 渲染成半块字符画，内嵌于选项右侧，无需网页查看。
 
-- **kitty 终端**：完整体验（标志图真彩内嵌）。
-- 其他终端：可以运行，但图片题只能看到本地路径提示，**做题体验不完整**。
+需安装 `chafa`：
+
+```bash
+# Arch/Manjaro (CachyOS 等)
+sudo pacman -S chafa
+# Debian/Ubuntu
+sudo apt install chafa
+# macOS
+brew install chafa
+```
 
 ## 📦 安装
 
 需要 Python 3.10+。
 
 ```bash
-# kitty 终端里执行
+# 在任一终端里执行
 python3 -m venv .venv
 source .venv/bin/activate.fish        # bash: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> 依赖：`rich`（界面）、`click`（命令行）、`prompt_toolkit`（交互命令界面），无浏览器/网络依赖。
+> 依赖：`rich`（界面）、`click`（命令行）、`prompt_toolkit`（交互界面）；系统需 `chafa`（图片渲染）。
 
 ## 🚀 使用
 
@@ -79,28 +89,24 @@ python -m trainer.main --subject 第一冊         # 只练第一册
 python -m trainer.main --mode stats             # 成绩统计
 ```
 
-### 作答键
+### 作答交互（训练模式）
+
+进入模式后，每题以全屏一页呈现：**题目与选项在左，交通标志图在右**（chafa 半块画）。
 
 | 按键 | 作用 |
 |------|------|
-| `A` / `B` / `C` / `D` | 作答，即时显示对错与正确答案 |
-| `s` | 跳过（计入错题） |
-| `q` / `quit` | 退出，进度自动保存 |
+| `↑` / `↓` | 上下移动选择选项 |
+| `Enter` | 确认作答 |
+| `q` | 退出 |
 
-### 图片题显示
+错题处理：**答错时显示「答错」并给一次重答机会**（正确答案会高亮），再答错才进入下一题。
 
-默认 `--view-image auto`：在 **kitty 终端** 自动用 `icat` 真彩内嵌显示标志图。
-也可以：
-
-```bash
-python -m trainer.main --mode random --view-image ascii   # img2txt ASCII 图
-python -m trainer.main --view-image viu                    # 外接查看器
-```
+模拟考（`exam`）模式：作答后**不显示对错、不重答**，交卷统一批改看总分。
 
 ## 🧱 目录结构
 
 ```
-trainer/    交互练习端（shell.py 命令界面 + main.py 刷题核心）
+trainer/    交互练习端（shell.py 命令界面 + tui.py 全屏刷题 + main.py 核心）
 database/   SQLite 数据访问层（schema.sql + store.py）
 data/       题库 questions.db + 题目图片 images/（随项目发布）
 doc/        进度文档
