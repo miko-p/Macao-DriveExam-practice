@@ -205,15 +205,21 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str,
             # 学习模式：enter 下一 / r 上一
             i = 0
             n = len(questions)
+            reached_end = False
             while 0 <= i < n:
-                res = run_question(questions[i], learn=True)
+                res = run_question(questions[i], learn=True, last=(i == n - 1))
                 if res["quit"]:
                     console.print("\n[dim]已退出学习[/dim]")
                     break
                 if res["nav"] == "prev":
-                    i -= 1
+                    i = max(0, i - 1)
                 else:  # next
+                    if i == n - 1:      # 已到最后一题再按 next 结束
+                        reached_end = True
+                        break
                     i += 1
+            if reached_end:
+                console.print("\n[dim]已到最后一题，学习结束[/dim]")
         else:
             for q in questions:
                 res = run_question(q)                  # 全屏箭头选择（含错题重答）

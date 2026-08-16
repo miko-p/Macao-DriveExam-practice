@@ -17,9 +17,9 @@ from config import ROOT
 
 DISPLAY_H = 60          # 内容区总高（估算）
 
-# 图片（加大）
-IMG_H = 24            # 图片渲染高度（字符行）
-IMG_W = 56            # 图片渲染宽度（字符）
+# 图片（加大, 宽度撑满与题目区对齐）
+IMG_H = 30            # 图片渲染最大高度（字符行）
+IMG_W = 90            # 图片渲染最大宽度（字符, 受终端宽限制）
 
 # ANSI
 _C = "\x1b["
@@ -77,20 +77,52 @@ def _term_height() -> int:
         return 40
 
 
+def _enlarge(path: str, target_px: int) -> str:
+    """用 ImageMagick convert 把源图插值放大到 target_px 宽(保宽高比)，返回临时文件。
+    放大后 icat 显示更大更清晰，避免小源图直接拉伸过糊。失败则返回原路径。"""
+    try:
+        import tempfile
+        fd, tmp = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        # lanczos 高质量插值；-resize 保持宽高比 (只给宽度，高自动)
+        r = subprocess.run(
+            ["convert", path, "-resize", f"{target_px}x{target_px}",
+             "-filter", "lanczos", "+repage", tmp],
+            capture_output=True)
+        if r.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 0:
+            return tmp
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    except Exception:
+        pass
+    return path
+
+
 def _render_img_centered(path: str, height: int = IMG_H) -> int:
-    """居中渲染真彩图片，返回实际占行数 height。"""
+    """居中渲染真彩图片（convert 插值放大保证清晰）。返回实际占行数。"""
     if not path or not Path(path).exists():
         return 0
     tw = _term_width()
-    left = max(1, (tw - IMG_W) // 2)   # 水平居中
+    img_w = max(20, min(tw - 4, IMG_W))     # 宽度尽量撑满终端(与题目区对齐), 不超屏
+    h = min(height, IMG_H)
+    left = max(1, (tw - img_w) // 2)        # 水平居中(靠近题目区宽度)
+    # 放大源图: 目标像素 = 格子宽 * 每格约10px, 至少4x, 保证放大后基本清晰
+    target_px = max(img_w * 10, 400)
+    big = _enlarge(path, target_px)
     try:
         subprocess.run(
             ["kitty", "+kitten", "icat", "--transfer-mode=stream",
-             "--place", f"{IMG_W}x{min(height, IMG_H)}@{left}x1", str(path)],
+             "--place", f"{img_w}x{h}@{left}x1", str(big)],
             check=False)
     except FileNotFoundError:
         return 0
-    return min(height, IMG_H)
+    finally:
+        if big != path and Path(big).exists():
+            try:
+                os.unlink(big)
+            except OSError:
+                pass
+    return h
 
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -190,10 +222,11 @@ def _read_key() -> str:
 
 # ---------- 主逻辑 ----------
 
-def run_question(q, exam: bool = False, learn: bool = False) -> dict:
+def run_question(q, exam: bool = False, learn: bool = False, last: bool = False) -> dict:
     """运行一题。
     练习(exam=False,learn=False): 箭头选择+错题重答。
     学习(learn=True): 正确项绿色背景高亮, Enter下一题, r上一题。
+    last=True (learn): 最后一题, 反馈显示"已到最后一题"。
     返回 {correct, first_wrong, quit, choice, nav} (nav: next/prev, learn模式)。
     """
     result = {"correct": False, "first_wrong": False, "quit": False,
@@ -285,7 +318,8 @@ def run_question(q, exam: bool = False, learn: bool = False) -> dict:
 
     def fmt_feedback() -> str:
         if learn:
-            return f"{_OKBG}正确答案已高亮 ✓{_RST}"
+            tail = " · 已到最后一题" if last else ""
+            return f"{_OKBG}正确答案已高亮 ✓{_RST}{tail}"
         if not exam and answered:
             return f"{_OKT}✓ 正确{_RST}" if final_correct else f"{_ERRBG}✗ 答错（请重答）{_RST}"
         if exam and answered:
