@@ -26,6 +26,7 @@ _C = "\x1b["
 _RST = f"{_C}0m"
 _SEL = f"{_C}48;2;68;68;170;38;2;255;255;255m"
 _OKT = f"{_C}32m"
+_OKBG = f"{_C}48;2;0;150;0;38;2;255;255;255m"   # 正确项 绿底白字(learn)
 _ERRBG = f"{_C}48;2;136;34;34;38;2;255;255;255m"
 _GRAY = f"{_C}90m"
 _TTL = f"{_C}1;36m"
@@ -158,17 +159,45 @@ def _exit_raw():
 
 
 def _read_key() -> str:
+    """读取一个按键。
+    返回: up/down/left/right/enter/ctrl+enter/esc/q 或字符。
+    支持 CSI u (kitty键盘协议) 用于 Ctrl+Enter。
+    """
     ch = sys.stdin.read(1)
     if ch == "\x1b":
-        nxt = sys.stdin.read(2)
-        return {"[A": "up", "[B": "down", "[C": "right", "[D": "left"}.get(nxt, "esc")
-    return ch
+        nxt = sys.stdin.read(1)
+        if nxt == "[":
+            # CSI 序列：读参数直到结束字母
+            seq = "["
+            while True:
+                c = sys.stdin.read(1)
+                if not c:
+                    break
+                seq += c
+                if c == "~" or c.isalpha():
+                    break
+            if seq in ("[A", "[B", "[C", "[D"):
+                return {"[A": "up", "[B": "down", "[C": "right", "[D": "left"}[seq]
+            if seq == "[13;5u":        # Ctrl+Enter (kitty CSI u)
+                return "ctrl+enter"
+            return "esc"
+        elif nxt == "O":               # SS3 应用模式箭头
+            c = sys.stdin.read(1)
+            return {"A": "up", "B": "down", "C": "right", "D": "left"}.get(c, "esc")
+        return "esc"
+    return ch   # '\r'/'\n'=enter, 'q', 其他字符
 
 
 # ---------- 主逻辑 ----------
 
-def run_question(q, exam: bool = False) -> dict:
-    result = {"correct": False, "first_wrong": False, "quit": False, "choice": ""}
+def run_question(q, exam: bool = False, learn: bool = False) -> dict:
+    """运行一题。
+    练习(exam=False,learn=False): 箭头选择+错题重答。
+    学习(learn=True): 正确项绿色背景高亮, Enter下一题, Ctrl+Enter上一题。
+    返回 {correct, first_wrong, quit, choice, nav} (nav: next/prev, learn模式)。
+    """
+    result = {"correct": False, "first_wrong": False, "quit": False,
+              "choice": "", "nav": None}
     img, _ = _split_img(q["stem"])
     choices = _choices_dict(q)
     letters = list(choices.keys())
@@ -214,7 +243,7 @@ def run_question(q, exam: bool = False) -> dict:
         return rowa, opt_bottom + 1
 
     def _opt_line(idx: int, tone) -> str:
-        """生成一个选项行：纯文本，选中/对错加底纹，无竖线。tone: sel/ok/err/gray/None。"""
+        """生成一个选项行：纯文本，选中/对错加底纹，无竖线。tone: sel/ok/okbg/err/gray/None。"""
         ch = letters[idx]
         txt = choices[ch]
         cell = None
@@ -222,6 +251,8 @@ def run_question(q, exam: bool = False) -> dict:
             cell = _SEL
         elif tone == "ok":
             cell = _OKT
+        elif tone == "okbg":
+            cell = _OKBG
         elif tone == "err":
             cell = _ERRBG
         elif tone == "gray":
@@ -245,9 +276,16 @@ def run_question(q, exam: bool = False) -> dict:
     HELP_ROW = FEEDBACK_ROW + 1 + 0   # 帮助紧接反馈
 
     # 初始高亮
-    _draw_at(rowa[letters[sel]], _opt_line(sel, "sel"))
+    if learn:
+        # 学习模式：直接高亮正确项（绿底白字）
+        for idx, ch in enumerate(letters):
+            _draw_at(rowa[ch], _opt_line(idx, "okbg" if ch == correct else None))
+    else:
+        _draw_at(rowa[letters[sel]], _opt_line(sel, "sel"))
 
     def fmt_feedback() -> str:
+        if learn:
+            return f"{_OKBG}正确答案已高亮 ✓{_RST}"
         if not exam and answered:
             return f"{_OKT}✓ 正确{_RST}" if final_correct else f"{_ERRBG}✗ 答错（请重答）{_RST}"
         if exam and answered:
@@ -255,6 +293,8 @@ def run_question(q, exam: bool = False) -> dict:
         return ""
 
     def fmt_help() -> str:
+        if learn:
+            return "Enter 下一题 · Ctrl+Enter 上一题 · q 退出"
         if exam:
             return "↑↓ 选择 · Enter 确认 · q 交卷" if not answered else "← 继续"
         if answered and not final_correct:
@@ -270,6 +310,28 @@ def run_question(q, exam: bool = False) -> dict:
         _draw_at(rowa[letters[idx]], _opt_line(idx, tone))
 
     paint_feedback()
+    if learn:
+        # 学习模式：无箭头，Enter 下一题 / Ctrl+Enter 上一题 / q 退出
+        try:
+            _enter_raw()
+            while True:
+                key = _read_key()
+                if key in ("\r", "\n"):
+                    result["nav"] = "next"
+                    break
+                elif key == "ctrl+enter":
+                    result["nav"] = "prev"
+                    break
+                elif key == "q":
+                    result["quit"] = True
+                    break
+        except (KeyboardInterrupt, EOFError):
+            result["quit"] = True
+        finally:
+            _exit_raw()
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+        return result
 
     try:
         _enter_raw()

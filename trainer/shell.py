@@ -25,20 +25,22 @@ console = Console()
 
 # 命令集（含常用的中文别名和选项，用于 fuzzy 补全）
 COMMANDS = [
-    # 模式命令
-    "start", "顺序",
-    "random", "随机",
-    "exam", "模拟考", "考试",
-    "wrong", "错题",
-    "stats", "统计",
-    # 章节
-    "book 第一冊", "book 第二冊", "book 第三冊", "book 第四冊", "book 第五冊",
-    "第一冊", "第二冊", "第三冊", "第四冊", "第五冊",
-    "chapter",
+    # 模式命令（仅英文）
+    "start",
+    "random",
+    "exam",
+    "wrong",
+    "stats",
+    # 答题练习（原 book）：practice book <册> [题号]
+    "practice book 1", "practice book 2", "practice book 3",
+    "practice book 4", "practice book 5",
+    "practice book 1 1", "practice book 1 5",
+    # 学习浏览：learn book <册> [题号]
+    "learn book 1", "learn book 2", "learn book 3",
+    "learn book 4", "learn book 5",
+    "learn book 1 1", "learn book 1 5",
     # 其他
-    "help", "帮助", "说明",
-    "clear", "清屏",
-    "quit", "exit", "退出",
+    "help", "clear", "quit",
 ]
 
 BANNER = r"""
@@ -68,21 +70,25 @@ def _get_modes_help() -> str:
     return """\
 [bold cyan]MDrivePractice 命令[/bold cyan]
 
-[bold cyan]模式[/bold]
-  start | 顺序 [N]           顺序刷 N 题（默认全部）
-  random | 随机 [--count N]   随机抽 N 题（默认全部）
-  wrong | 错题 [--count N]    错题重练 N 题
-  exam | 模拟考 [--count N]   模拟考 N 题（默认40），统一批改
-  stats | 统计                查看成绩统计
+[bold cyan]模式[/bold cyan]
+  start [N]               顺序刷 N 题（默认全部）
+  random [--count N]      随机抽 N 题（默认全部）
+  wrong [--count N]       错题重练 N 题
+  exam [--count N]        模拟考 N 题（默认40），统一批改
+  stats                   查看成绩统计
 
-[bold cyan]章节[/bold]
-  book 第一冊                只练某一册
-  也可直接输入册名：第一冊 / 第二冊 ...
+[bold cyan]答题练习[/bold cyan]
+  practice book 1 [题号]   练习第一册（可指定题号开始）
+  practice book 2 [题号]   （1-5 册）
 
-[bold cyan]其他[/bold]
-  help | 帮助                 显示帮助
-  clear | 清屏                 重显标题
-  quit | exit | 退出           退出程序
+[bold cyan]学习浏览[/bold cyan]
+  learn book 1 [题号]      浏览第一册：正确答案绿色高亮，
+                           Enter 下一题 · Ctrl+Enter 上一题
+
+[bold cyan]其他[/bold cyan]
+  help                    显示帮助
+  clear                   重显标题
+  quit                    退出程序
 """
 
 
@@ -92,11 +98,31 @@ def _make_completer() -> FuzzyCompleter:
 
 
 def _parse_command(raw: str):
-    """解析命令，返回 (mode, subject, count)；无法识别的返回 None。"""
+    """解析命令，返回 (action, subject, count, start_qid)；无法识别的返回 None。"""
     raw = raw.strip()
     if not raw:
         return None
     parts = raw.split()
+    cmd0 = parts[0].lower()
+
+    # 答题/学习：practice/learn book <册> [题号]（不能先做 count 提取，会误吞题号）
+    if cmd0 in ("practice", "learn"):
+        mode = "practice" if cmd0 == "practice" else "learn"
+        # 期望: practice book <N> [qid]
+        if len(parts) >= 3 and parts[1].lower() == "book":
+            book = _normalize_book(parts[2])
+            if book:
+                start_qid = None
+                if len(parts) >= 4 and parts[3].isdigit():
+                    start_qid = int(parts[3])
+                return (mode, book, None, start_qid)
+        # 也可: practice <N> [qid]
+        if len(parts) >= 2:
+            book = _normalize_book(parts[1])
+            if book:
+                start_qid = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else None
+                return (mode, book, None, start_qid)
+        return None
 
     # 提取数量参数：--count N 或 结尾数字
     count = None
@@ -112,48 +138,36 @@ def _parse_command(raw: str):
     if not parts:
         return None
     cmd = parts[0].lower()
-    subject = parts[1] if len(parts) > 1 else None
 
-    # 模式命令
-    if cmd in ("start", "顺序"):
-        return ("sequential", None, count)
-    if cmd in ("random", "随机"):
-        return ("random", None, count)
-    if cmd in ("wrong", "错题"):
-        return ("wrong", None, count)
-    if cmd in ("exam", "模拟考", "考试"):
-        return ("exam", None, count)
-    if cmd in ("stats", "统计"):
-        return ("stats", None, None)
-
-    # 章节命令：book 第一冊 / 直接册名
-    if cmd in ("book", "chapter") and subject:
-        cn = _normalize_book(subject) or subject
-        return ("sequential", cn, count)
-    if subject:  # 如: 第X册 作为 book 的主题
-        cn = _normalize_book(subject)
-        if cn:
-            return ("sequential", cn, count)
-    # 直接用册名做命令 (第一冊 单独)
-    cn = _normalize_book(parts[0])
-    if cn:
-        return ("sequential", cn, count)
+    # 模式命令（仅英文）
+    if cmd == "start":
+        return ("sequential", None, count, None)
+    if cmd == "random":
+        return ("random", None, count, None)
+    if cmd == "wrong":
+        return ("wrong", None, count, None)
+    if cmd == "exam":
+        return ("exam", None, count, None)
+    if cmd == "stats":
+        return ("stats", None, None, None)
 
     # 控制命令
-    if cmd in ("help", "帮助", "说明"):
-        return ("__help__", None, None)
-    if cmd in ("clear", "清屏"):
-        return ("__clear__", None, None)
-    if cmd in ("quit", "exit", "退出"):
-        return ("__quit__", None, None)
+    if cmd in ("help", "clear", "quit"):
+        return (f"__{cmd}__", None, None, None)
 
     return None  # 未知
 
 
 def _normalize_book(s: str) -> Optional[str]:
-    """把 第一冊/第一册/第 X 冊 等统一成 繁體冊名；非册名返回 None。"""
+    """把 1/第一冊/第一册 等统一成 繁體冊名；非册名返回 None。"""
+    NUM = {"1": "第一冊", "2": "第二冊", "3": "第三冊",
+           "4": "第四冊", "5": "第五冊", "一": "第一冊", "二": "第二冊",
+           "三": "第三冊", "四": "第四冊", "五": "第五冊"}
+    S = s.strip()
+    if S in NUM:
+        return NUM[S]
     for cn in ("第一冊", "第二冊", "第三冊", "第四冊", "第五冊"):
-        if cn in s or cn.replace("冊", "册") in s:
+        if cn in S or cn.replace("冊", "册") in S:
             return cn
     return None
 
@@ -184,7 +198,7 @@ def run_shell() -> None:
                 console.print("[yellow]未识别的命令，输入 [bold]help[/bold] 查看帮助。[/yellow]")
             continue
 
-        action, subject, count = cmd
+        action, subject, count, start_qid = cmd
         if action == "__help__":
             console.print(_get_modes_help())
             continue
@@ -198,7 +212,8 @@ def run_shell() -> None:
         # 进入模式：先清屏
         _clear()
         try:
-            run(subject=subject, mode=action, count=count, viewer="auto")
+            run(subject=subject, mode=action, count=count,
+                start_qid=start_qid, viewer="auto")
         except SystemExit:
             pass
         # 刷题结束返回命令界面

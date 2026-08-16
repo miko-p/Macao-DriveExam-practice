@@ -123,7 +123,18 @@ def _record(conn, q, correct: int, mode: str) -> None:
     conn.commit()
 
 
-def run(subject: str | None, mode: str, count: int | None, viewer: str) -> None:
+def _qid_from_user(subject: str, qid: int) -> str:
+    """把 (册名, 题号) 转成 source_id，如 ("第一冊", 50) -> "book1_q50"。
+    优雅回退：找不到对应册号时返回 book1_q<qid>。"""
+    BOOK_N = {"第一冊": 1, "第二冊": 2, "第三冊": 3, "第四冊": 4, "第五冊": 5}
+    for cn, n in BOOK_N.items():
+        if cn in subject:
+            return f"book{n}_q{qid}"
+    return f"book1_q{qid}"
+
+
+def run(subject: str | None, mode: str, count: int | None, viewer: str,
+        start_qid: int | None = None) -> None:
     conn = connect()
     init_db(conn)
 
@@ -157,8 +168,15 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str) -> None:
         questions = get_wrong_questions(conn, subject)
         if count:
             questions = questions[:count]
-    else:  # sequential
+    else:  # sequential / practice / learn（册内顺序）
         questions = list(get_questions_with_stats(conn, subject))
+        # 题号跳转：从指定 source_id 那题开始（如 practice book 1 50 → 从 book1_q50）
+        if start_qid and subject:
+            target = _qid_from_user(subject, start_qid)
+            for i, q in enumerate(questions):
+                if str(q["source_id"]) == target:
+                    questions = questions[i:] + questions[:i]  # 从该题开始，继续后面的
+                    break
         if count:
             questions = questions[:count]
 
@@ -174,20 +192,37 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str) -> None:
         conn.close()
         sys.exit(1 if mode != "wrong" else 0)
 
-    console.print(f"[bold]开始练习[/bold] · {len(questions)} 题 · 模式 {mode}"
+    console.print(f"[bold]开始{f'学习' if mode=='learn' else '练习'}[/bold] · {len(questions)} 题 · 模式 {mode}"
                   + (f" · {subject}" if subject else ""))
-    console.print("[dim]↑↓ 选择选项 · Enter 确认 · q 退出 · 答错可重答一次[/dim]\n")
+    if mode == "learn":
+        console.print("[dim]Enter 下一题 · Ctrl+Enter 上一题 · q 退出 · 正确答案绿色高亮[/dim]\n")
+    else:
+        console.print("[dim]↑↓ 选择选项 · Enter 确认 · q 退出 · 答错可重答一次[/dim]\n")
 
     correct = 0
     try:
-        for q in questions:
-            res = run_question(q)                  # 全屏箭头选择（含错题重答）
-            if res["quit"]:
-                console.print("\n[dim]已退出练习[/dim]")
-                break
-            ok = 1 if res["correct"] else 0
-            _record(conn, q, ok, mode)
-            correct += ok
+        if mode == "learn":
+            # 学习模式：enter 下一 / ctrl+enter 上一
+            i = 0
+            n = len(questions)
+            while 0 <= i < n:
+                res = run_question(questions[i], learn=True)
+                if res["quit"]:
+                    console.print("\n[dim]已退出学习[/dim]")
+                    break
+                if res["nav"] == "prev":
+                    i -= 1
+                else:  # next
+                    i += 1
+        else:
+            for q in questions:
+                res = run_question(q)                  # 全屏箭头选择（含错题重答）
+                if res["quit"]:
+                    console.print("\n[dim]已退出练习[/dim]")
+                    break
+                ok = 1 if res["correct"] else 0
+                _record(conn, q, ok, mode)
+                correct += ok
     except KeyboardInterrupt:
         console.print("\n[dim]中断中止[/dim]")
 
