@@ -183,11 +183,13 @@ def run_question(q, exam: bool = False) -> dict:
     correct = q["answer"] or ""
     _, stem = _split_img(q["stem"])
 
-    # 动态图片高度：确保整页(图片+题目区+选项区+反馈/帮助)不超过终端高度
-    fixed_rows = 4 + (len(letters) * (1 + ROW_GAP) + 1) + 2   # 题目区4 + 选项区(含横线) + 反馈+帮助
-    eff_img_h = max(4, min(IMG_H, th - fixed_rows - 2))
-    # 布局位置记录
-    TITLE_TOP = eff_img_h + 2
+    # 动态图片高度：确保整页(图片+题目区+选项区+底部空行+反馈/帮助)不超过终端高度
+    #  题目区 4 行 | 选项区(选项+项间空行+底部空1行+横线) | 反馈1 + 帮助1
+    opt_block = (len(letters) - 1) * (1 + ROW_GAP) + 2   # 选项本身 + 底部空1行 + 最后横线
+    fixed_rows = 4 + 1 + opt_block + 2                    # 题目区4 + 图片后1空行 + 选项块 + 反馈/帮助
+    eff_img_h = max(4, min(IMG_H, th - fixed_rows - 1))
+    # 布局位置记录（整体紧贴图片下方）
+    TITLE_TOP = eff_img_h + 1
 
     def draw_frames():
         """画题目横线+选项横线（横线满宽）。返回每个选项的行号。"""
@@ -206,7 +208,8 @@ def run_question(q, exam: bool = False) -> dict:
             rowa[ch] = rr
         for idx, ch in enumerate(letters):
             _draw_at(rowa[ch], _opt_line(idx, None))
-        opt_bottom = opt_top + (len(letters)-1) * (1 + ROW_GAP) + 1
+        # 最后一个选项后空 1 行，再画横线（缓冲，避免横线被裁剪/贴太近）
+        opt_bottom = opt_top + (len(letters) - 1) * (1 + ROW_GAP) + 2
         _draw_at(opt_bottom, _sep(tw))
         return rowa, opt_bottom + 1
 
