@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# 运行数据：题库与图片随项目发布
+data/*
+!data/images/
+!data/questions.db
+
+# 本地会话 / 原始缓存（不上传，含个人敏感信息）
+data/browser_profile/
+data/samples/
+data/*.log
+data/*.json
+
+# 账号与环境
+.env
