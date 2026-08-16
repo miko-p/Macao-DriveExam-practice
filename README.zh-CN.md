@@ -41,30 +41,42 @@ source .venv/bin/activate.fish        # bash: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> 依赖：`rich`（界面）、`click`（命令行），无浏览器/网络依赖。
+> 依赖：`rich`（界面）、`click`（命令行）、`prompt_toolkit`（交互命令界面），无浏览器/网络依赖。
 
 ## 🚀 使用
 
-```
-用法：python -m trainer.main [选项]
+### 启动交互式界面
 
-选项：
-  --subject 章节     只练某个章节（如 第一冊）
-  --mode 模式        顺序 sequential(默认) | 随机 random | 错题 wrong
-                     | 统计 stats | 模拟考 exam
-  --count 数量       题数（默认全部）
-  --view-image 方式   auto(默认,kitty真彩) | ascii | <外部程序>
-```
-
-### 常用命令
+在 kitty 终端输入 `MDrivePractice`（fish 已配置）：
 
 ```bash
-python -m trainer.main                          # 全部，顺序刷题
-python -m trainer.main --subject 第一冊         # 只练第一册
-python -m trainer.main --mode random --count 20 # 随机抽 20 题
-python -m trainer.main --mode wrong             # 错题重练
-python -m trainer.main --mode stats             # 成绩统计
+MDrivePractice
+# 或 python -m trainer.shell
+```
+
+进入全屏界面：**显示标题 + 底部命令输入框**，输入命令按 Enter 进入对应模式。
+输入时支持 **fuzzy 下拉补全**（Tab / 方向键选取）。完成一次练习后自动返回命令界面。
+
+### 命令
+
+| 命令 | 说明 |
+|------|------|
+| `start [N]` / `顺序` | 顺序刷题（N 题，默认全部） |
+| `random [--count N]` | 随机抽 N 题（默认全部） |
+| `wrong [--count N]` | 错题重练 N 题 |
+| `exam [--count N]` | 模拟考 N 题（默认 40），统一交卷批改 |
+| `stats` / `统计` | 成绩统计（整体 + 分章节） |
+| `book 第一冊` / `第一冊` | 只练某一册 |
+| `help` | 显示帮助 |
+| `clear` | 重显标题 |
+| `quit` / `exit` | 退出 |
+
+也支持**命令行直通**（跳过交互界面，直接刷题）：
+
+```bash
 python -m trainer.main --mode exam --count 40   # 模拟考 40 题
+python -m trainer.main --subject 第一冊         # 只练第一册
+python -m trainer.main --mode stats             # 成绩统计
 ```
 
 ### 作答键
@@ -88,7 +100,7 @@ python -m trainer.main --view-image viu                    # 外接查看器
 ## 🧱 目录结构
 
 ```
-trainer/    交互练习端（main.py）
+trainer/    交互练习端（shell.py 命令界面 + main.py 刷题核心）
 database/   SQLite 数据访问层（schema.sql + store.py）
 data/       题库 questions.db + 题目图片 images/（随项目发布）
 doc/        进度文档
@@ -96,13 +108,13 @@ doc/        进度文档
 
 ## ⚡ 一键启动（可选)
 
-把下面这行加进 `~/.config/fish/config.fish`，之后在 kitty 里输入 `drive` 即可刷题：
+以下已加进你的 `~/.config/fish/config.fish`，在 kitty 终端输入 `MDrivePractice` 即可启动：
 
 ```fish
-function drive
+function MDrivePractice
     cd ~/Program_Project/drive-lesson-practice
     source .venv/bin/activate.fish
-    python -m trainer.main $argv
+    python -m trainer.shell $argv
 end
 ```
 
