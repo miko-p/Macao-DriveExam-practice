@@ -25,6 +25,7 @@ from prompt_toolkit.application import Application
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.styles import Style
 
 from config import ROOT
@@ -107,51 +108,71 @@ def build_state(q) -> QState:
     for i in range(n):
         l = left[i] if i < len(left) else ""
         r = right[i] if i < len(right) else ""
-        merged.append(l.ljust(lw) + (r.ljust(IMG_W) if r else ""))
+        # 左块按可见宽度右对齐补空格；右块(chafa ANSI)原样(不按含码长度ljust)
+        merged.append(l.ljust(lw) + r.rstrip())
     return QState(q=q, left=left, right=right, merged=merged,
                   opt_start=opt_start, choices_letters=letters)
 
 
-# ---------- 动态 HTML 生成 ----------
+# ---------- 动态 ANSI 生成（prompt_toolkit ANSI 解析） ----------
+
+# ANSI 色码
+_C = "\x1b["         # ESC[
+_RST = f"{_C}0m"
+_TITLE = f"{_C}1;36m"        # 粗亮青
+_SEL = f"{_C}48;2;68;68;170;38;2;255;255;255m"  # 蓝底白字(选中)
+_OKTXT = f"{_C}32m"          # 绿
+_ERRBG = f"{_C}48;2;136;34;34;38;2;255;255;255m"  # 红底白字(重答选中错)
+_GRAY = f"{_C}90m"           # 灰(曾选错项)
+
+
+def _norm_line(s: str) -> str:
+    """chafa 行已含 ANSI,保留; 纯文本行返回原样。"""
+    return s
+
 
 def _body_html(st: QState, hide_answer: bool = False) -> str:
-    """题目页主体 HTML（含选中高亮 / 对错标记）。hide_answer=True 时不标绿答案。"""
-    parts = [f"<b fg='#5f87ff'>{st.q['subject']} · {st.q['source_id']}</b>", ""]
+    """题目页主体 ANSI 字符串（题目/选项上色 + chafa 图片原样嵌入）。"""
+    lines = [f"{_TITLE}{st.q['subject']} · {st.q['source_id']}{_RST}", ""]
     correct = (st.q["answer"] or "")
     for i, text in enumerate(st.merged):
-        tag = ""
-        # 判断是否为选项行（需在 left 范围内）
+        # 判定是否为选项行
         if i < len(st.left) and i >= st.opt_start and st.left[i].strip():
             letter = st.left[i].strip()[0]
             is_sel = st.sel == (i - st.opt_start)
+            cell = _RST                        # 默认无色
             if not st.final_correct:
-                # 未答对（作答中 or 重答态）：显示选中高亮
                 if is_sel:
-                    tag = "bg:#4444aa fg:white"
-                # 答错后重答：显示正确答案绿色提示（exam 不显示）
+                    cell = _SEL
+                # 答错重答：正确项绿色
                 if st.answered and not hide_answer and letter == correct:
-                    tag = "fg:#00d700 bold"
+                    cell = _OKTXT
+                # 重答中选中错误项→红底
                 if st.answered and st.first_wrong and is_sel and letter != correct:
-                    tag = "bg:#882222 fg:white"      # 重答中选中错误项→红底
+                    cell = _ERRBG
             else:
-                # 已答对：整题可标绿
                 if letter == correct:
-                    tag = "fg:#00d700 bold"
+                    cell = _OKTXT
                 elif is_sel:
-                    tag = "fg:#888888"               # 曾选错项置灰
-        if tag:
-            parts.append(f"<{tag}>{text}</{tag}>")
+                    cell = _GRAY
+            # 选项部分上色；图片部分(chafa ANSI)原样保留
+            # 切分：左侧选项文本 + 右侧图片
+            # 用固定位置切分不可靠，这里整行上色（选项行图片区也被覆盖色，但 chafa 自带色会优先级更高）
+            lines.append(f"{cell}{text}{_RST}")
         else:
-            parts.append(text)
-    return "\n".join(parts)
+            # 题干/图片行：原样输出（保留 chafa ANSI）
+            lines.append(text)
+    return "\n".join(lines)
 
 
 def _feedback_html(st: QState) -> str:
     if not st.answered:
         return ""
     if st.final_correct:
-        return "<b fg='#00d700'>✓ 正确</b>"
-    return "<b fg='#ff5555'>✗ 答错" + ("（请重答，正确答案已高亮）" if not st.final_correct else "") + "</b>"
+        return f"{_C}1;32m✓ 正确{_RST}"
+    return (f"{_C}1;31m✗ 答错"
+            + ("（请重答，正确答案已高亮）" if not st.final_correct else "")
+            + f"{_RST}")
 
 
 def _helpbar_html(st: QState) -> str:
@@ -174,7 +195,7 @@ def run_question(q, exam: bool = False) -> dict:
     hide = bool(exam)
     _body_fn = lambda: _body_html(st, hide_answer=hide)
     if exam:
-        _fb_fn = lambda: "<b fg='#5fafaf'>已作答</b>" if st.answered else ""
+        _fb_fn = lambda: f"{_C}1;36m已作答{_RST}" if st.answered else ""
         _help_fn = lambda: (" ↑↓ 选择 · Enter 确认 · q 交卷"
                             if not st.answered else " ← 继续")
     else:
@@ -234,9 +255,9 @@ def run_question(q, exam: bool = False) -> dict:
             _event.app.exit()               # 重答后无论对错都下一题
         _event.app.invalidate()
 
-    body_control = FormattedTextControl(_body_fn)
-    fb_control = FormattedTextControl(_fb_fn)
-    help_control = FormattedTextControl(_help_fn)
+    body_control = FormattedTextControl(lambda: ANSI(_body_fn()))
+    fb_control = FormattedTextControl(lambda: ANSI(_fb_fn()))
+    help_control = FormattedTextControl(lambda: ANSI(_help_fn()))
 
     layout = Layout(
         HSplit([
