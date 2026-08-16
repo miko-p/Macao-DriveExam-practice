@@ -17,7 +17,7 @@
 | | |
 |---|---|
 | 📚 **内置题库** | 五册（第一冊~第五冊）647 题，按册分类 |
-| 🖼️ **图片显示** | 交通标志图以 chafa 半块画内嵌于题目右侧（任何 256 色终端） |
+| 🖼️ **图片显示** | 交通标志图以 kitty icat 真彩原图显示在题目上方 | 
 | 🎯 **多种模式** | 顺序 / 随机 / 章节 / 错题重练 |
 | 📝 **模拟考试** | 随机抽题、统一交卷、85% 及格线提示 |
 | 📊 **成绩统计** | 整体与分章节正确率、错题本 |
@@ -26,32 +26,22 @@
 
 ## ⚠️ 终端要求
 
-在任何支持 ANSI 色彩的终端（kitty / alacritty / GNOME Terminal 等）皆可使用。
-题目图片用 **chafa** 渲染成半块字符画，内嵌于选项右侧，无需网页查看。
+本工具面向 **kitty 终端** 设计：题目图片用 kitty 的 `icat` 以**真彩原图**显示在题目上方，这样才能看清交通标志。
 
-需安装 `chafa`：
-
-```bash
-# Arch/Manjaro (CachyOS 等)
-sudo pacman -S chafa
-# Debian/Ubuntu
-sudo apt install chafa
-# macOS
-brew install chafa
-```
+- 仅支持 **kitty 终端**（非 kitty 无法显示图片）。
 
 ## 📦 安装
 
 需要 Python 3.10+。
 
 ```bash
-# 在任一终端里执行
+# 在 kitty 终端里执行
 python3 -m venv .venv
 source .venv/bin/activate.fish        # bash: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> 依赖：`rich`（界面）、`click`（命令行）、`prompt_toolkit`（交互界面）；系统需 `chafa`（图片渲染）。
+> 依赖：`rich`（界面）、`click`（命令行）、`prompt_toolkit`（交互界面）。图片渲染用 kitty 自带的 `icat`，无需额外安装。
 
 ## 🚀 使用
 
@@ -91,7 +81,7 @@ python -m trainer.main --mode stats             # 成绩统计
 
 ### 作答交互（训练模式）
 
-进入模式后，每题以全屏一页呈现：**题目与选项在左，交通标志图在右**（chafa 半块画）。
+进入模式后，每题以一排呈现：**交通标志图以真彩原图显示在上方**，下方为题目与选项。
 
 | 按键 | 作用 |
 |------|------|

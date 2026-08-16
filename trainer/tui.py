@@ -1,57 +1,35 @@
-"""TUI 刷题界面：左右分栏(题目|图片) + 上下箭头选择 + 错题重答。
+"""TUI 刷题界面：图片在上(kitty icat 真彩整图) + 题目选项在下(箭头选择)。
 
-单题一页全屏渲染：
-  ┌─────────────────────────────────────────────────────┐
-  │ 第一冊 · book1_q1                        ▗▅▏        │
-  │ 圖一標誌表示:                                        │
-  │  → A. 向右轉彎   (chafa 半块画在右侧)                │
-  │    B. 向左轉彎                                       │
-  │    C. 應遵方向                                       │
-  │    D. 路線忠告                                       │
-  ├─────────────────────────────────────────────────────┤
-  │ ✓ 正确                                              │
-  │  ↑↓ 选择 · Enter 确认 · q 退出                       │
-  └─────────────────────────────────────────────────────┘
+纯终端方案（不切 alternate screen），保证 icat 真彩图片清晰且不被清除：
+  · 先用 kitty icat 渲染真彩原图到屏幕顶部
+  · 题目 + 选项打印在下方
+  · ↑/↓ 移动选中项(ANSI 高亮)，Enter 确认，q 退出
+  · 答错给一次重答机会（正确答案高亮），再错才下一题
 """
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
-from dataclasses import dataclass, field
-from typing import Optional
-
-from prompt_toolkit.application import Application
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.layout import HSplit, Layout, Window
-from prompt_toolkit.layout.controls import FormattedTextControl
-from prompt_toolkit.formatted_text import ANSI
-from prompt_toolkit.styles import Style
+import sys
+from pathlib import Path
 
 from config import ROOT
 
-IMG_W = 20   # 右侧图片字符宽
-IMG_H = 12   # 右侧图片字符高
+IMG_W = 32   # icat 渲染图片的目标字符宽（越宽越清晰）
+IMG_H = 18   # 图片目标高
 
 
-# ---------- chafa 图片 → 字符行 ----------
+# ---------- 图片渲染 ----------
 
-def chafa_lines(path: str, width: int = IMG_W, height: int = IMG_H) -> list[str]:
-    try:
-        out = subprocess.run(
-            ["chafa", "--size", f"{width}x{height}", "--format", "symbols",
-             "--colors", "full", str(path)],
-            capture_output=True, text=True, timeout=15)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return []
-    if out.returncode != 0:
-        return []
-    return out.stdout.splitlines()[:height]
+def _in_kitty() -> bool:
+    if "KITTY_WINDOW_ID" in os.environ:
+        return True
+    return "kitty" in os.environ.get("TERM", "").lower()
 
 
-# ---------- 工具 ----------
-
-def _split_img(text: str) -> tuple[Optional[str], str]:
+def _split_img(text: str) -> tuple[str | None, str]:
     m = re.match(r"^\[img:([^\]]+)\]\s*(.*)$", text, re.S)
     if m:
         p = ROOT / m.group(1)
@@ -75,201 +53,183 @@ def _choices_dict(q) -> dict:
         return {}
 
 
-@dataclass
-class QState:
-    q: dict
-    left: list = field(default_factory=list)     # 题干+选项 文本行
-    right: list = field(default_factory=list)    # chafa 图片行
-    merged: list = field(default_factory=list)   # 并排后的行块
-    opt_start: int = 0                            # left 中第一个选项的行号
-    choices_letters: list = field(default_factory=list)  # [A,B,C,D]
-    sel: int = 0
-    answered: bool = False        # 本题已确认（进入反馈态）
-    final_correct: bool = False
-    first_wrong: bool = False     # 第一次是否答错（重答标记）
-    quit: bool = False
-    show_feedback: bool = False   # 是否显示对错反馈
+def _render_image(path: str) -> int:
+    """用 kitty icat 渲染真彩图到当前屏幕，返回图片占用的行数。"""
+    if not path or not Path(path).exists():
+        return 0
+    try:
+        # 指定尺寸让图片不至于巨大，整宽渲染在当前屏幕（从顶部附近开始）
+        subprocess.run(
+            ["kitty", "+kitten", "icat", "--transfer-mode=stream",
+             "--scale-up", "--place", f"{IMG_W}x{IMG_H}@3x1", str(path)],
+            check=False)
+        return IMG_H
+    except FileNotFoundError:
+        return 0
 
 
-def build_state(q) -> QState:
-    img, stem = _split_img(q["stem"])
-    choices = _choices_dict(q)
-    left = [stem, ""]
-    opt_start = 2
-    letters = []
-    for ch, txt in choices.items():
-        left.append(f"  {ch}. {txt}")
-        letters.append(ch)
-    right = chafa_lines(img) if img else []
+# ---------- 键盘读取 ----------
 
-    lw = max(len(l) for l in left) + 2 if left else 8
-    n = max(len(left), len(right))
-    merged = []
-    for i in range(n):
-        l = left[i] if i < len(left) else ""
-        r = right[i] if i < len(right) else ""
-        # 左块按可见宽度右对齐补空格；右块(chafa ANSI)原样(不按含码长度ljust)
-        merged.append(l.ljust(lw) + r.rstrip())
-    return QState(q=q, left=left, right=right, merged=merged,
-                  opt_start=opt_start, choices_letters=letters)
+_TERMIOS_SAVED = None
 
 
-# ---------- 动态 ANSI 生成（prompt_toolkit ANSI 解析） ----------
+def _enter_raw() -> None:
+    import termios, tty
+    global _TERMIOS_SAVED
+    _TERMIOS_SAVED = termios.tcgetattr(sys.stdin.fileno())
+    tty.setraw(sys.stdin.fileno())
 
-# ANSI 色码
-_C = "\x1b["         # ESC[
+
+def _exit_raw() -> None:
+    import termios
+    global _TERMIOS_SAVED
+    if _TERMIOS_SAVED:
+        termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _TERMIOS_SAVED)
+
+
+def _read_key() -> str:
+    """读取一个按键。返回 up/down/enter/m/ 或字符；ESC 序列解析。"""
+    ch = sys.stdin.read(1)
+    if ch == "\x1b":
+        nxt = sys.stdin.read(2)
+        return {"[A": "up", "[B": "down", "[C": "right", "[D": "left"}.get(nxt, "esc")
+    return ch  # '\r'/'\n'->enter, 'q','a'...'
+
+
+# ---------- ANSI ----------
+
+_C = "\x1b["
 _RST = f"{_C}0m"
-_TITLE = f"{_C}1;36m"        # 粗亮青
-_SEL = f"{_C}48;2;68;68;170;38;2;255;255;255m"  # 蓝底白字(选中)
-_OKTXT = f"{_C}32m"          # 绿
-_ERRBG = f"{_C}48;2;136;34;34;38;2;255;255;255m"  # 红底白字(重答选中错)
-_GRAY = f"{_C}90m"           # 灰(曾选错项)
+_TITLE = f"{_C}1;36m"
+_SEL = f"{_C}48;2;68;68;170;38;2;255;255;255m"
+_OKTXT = f"{_C}32m"
+_ERRBG = f"{_C}48;2;136;34;34;38;2;255;255;255m"
+_GRAY = f"{_C}90m"
 
 
-def _norm_line(s: str) -> str:
-    """chafa 行已含 ANSI,保留; 纯文本行返回原样。"""
-    return s
+def _clear_screen() -> None:
+    sys.stdout.write(f"{_C}2J{_C}H")
+    sys.stdout.flush()
 
 
-def _body_html(st: QState, hide_answer: bool = False) -> str:
-    """题目页主体 ANSI 字符串（题目/选项上色 + chafa 图片原样嵌入）。"""
-    lines = [f"{_TITLE}{st.q['subject']} · {st.q['source_id']}{_RST}", ""]
-    correct = (st.q["answer"] or "")
-    for i, text in enumerate(st.merged):
-        # 判定是否为选项行
-        if i < len(st.left) and i >= st.opt_start and st.left[i].strip():
-            letter = st.left[i].strip()[0]
-            is_sel = st.sel == (i - st.opt_start)
-            cell = _RST                        # 默认无色
-            if not st.final_correct:
-                if is_sel:
-                    cell = _SEL
-                # 答错重答：正确项绿色
-                if st.answered and not hide_answer and letter == correct:
-                    cell = _OKTXT
-                # 重答中选中错误项→红底
-                if st.answered and st.first_wrong and is_sel and letter != correct:
-                    cell = _ERRBG
-            else:
-                if letter == correct:
-                    cell = _OKTXT
-                elif is_sel:
-                    cell = _GRAY
-            # 选项部分上色；图片部分(chafa ANSI)原样保留
-            # 切分：左侧选项文本 + 右侧图片
-            # 用固定位置切分不可靠，这里整行上色（选项行图片区也被覆盖色，但 chafa 自带色会优先级更高）
-            lines.append(f"{cell}{text}{_RST}")
+def _move(row: int, col: int = 1) -> None:
+    sys.stdout.write(f"{_C}{row};{col}H")
+    sys.stdout.flush()
+
+
+# ---------- 渲染 ----------
+
+def _render_all(q, sel: int, answered: bool, final_correct: bool,
+                first_wrong: bool, exam: bool) -> int:
+    """渲染整屏（题目+选项），返回选项区起始行。图片已由外部渲染在顶部不动。"""
+    img, stem = _split_img(q["stem"])
+    opt_start_row = IMG_H + 3          # 图片下方留几行
+    _move(opt_start_row)
+    sys.stdout.write(f"{_C}0J")        # 清空从当前位置到屏幕末尾（保留上方图片）
+    sys.stdout.write(f"{_TITLE}{q['subject']} · {q['source_id']}{_RST}\n")
+    sys.stdout.write(f"{stem}\n\n")
+    correct = q["answer"] or ""
+    choices = _choices_dict(q)
+    letters = list(choices.keys())
+    for idx, ch in enumerate(letters):
+        txt = choices[ch]
+        line = f"  {ch}. {txt}"
+        cell = _RST
+        if not final_correct:
+            if idx == sel:
+                cell = _SEL
+            if answered and not exam and ch == correct:
+                cell = _OKTXT
+            if answered and first_wrong and idx == sel and ch != correct:
+                cell = _ERRBG
         else:
-            # 题干/图片行：原样输出（保留 chafa ANSI）
-            lines.append(text)
-    return "\n".join(lines)
+            if ch == correct:
+                cell = _OKTXT
+            elif idx == sel:
+                cell = _GRAY
+        sys.stdout.write(f"{cell}{line}{_RST}\n")
+    # 反馈
+    sys.stdout.write("\n")
+    if not exam and answered:
+        if final_correct:
+            sys.stdout.write(f"{_C}1;32m✓ 正确{_RST}\n")
+        else:
+            sys.stdout.write(f"{_C}1;31m✗ 答错（请重答，正确答案已高亮）{_RST}\n")
+    elif exam and answered:
+        sys.stdout.write(f"{_C}1;36m已作答{_RST}\n")
+    # 帮助
+    if exam:
+        hint = " ↑↓ 选择 · Enter 确认 · q 交卷" if not answered else " ← 继续"
+    else:
+        hint = (" ↑↓ 选择要重答的选项 · Enter 确认 · q 退出"
+                if answered and not final_correct else " ↑↓ 选择 · Enter 确认 · q 退出")
+    sys.stdout.write(hint)
+    sys.stdout.flush()
+    return opt_start_row
 
-
-def _feedback_html(st: QState) -> str:
-    if not st.answered:
-        return ""
-    if st.final_correct:
-        return f"{_C}1;32m✓ 正确{_RST}"
-    return (f"{_C}1;31m✗ 答错"
-            + ("（请重答，正确答案已高亮）" if not st.final_correct else "")
-            + f"{_RST}")
-
-
-def _helpbar_html(st: QState) -> str:
-    if st.answered and not st.final_correct:
-        return " ↑↓ 选择要重答的选项 · Enter 确认 · q 退出（显示正确答案）"
-    return " ↑↓ 选择 · Enter 确认 · q 退出"
-
-
-# ---------- Application ----------
 
 def run_question(q, exam: bool = False) -> dict:
-    """运行一题箭头选择。返回 {correct, first_wrong, quit, choice}。
-
-    exam=True：模拟考模式，作答后不显示答案、不重答，记录 choice 直接进入下一题。
-    """
-    st = build_state(q)
+    """运行一题：图片在上(icat真彩) + 题目选项在下(箭头选择)。"""
     result = {"correct": False, "first_wrong": False, "quit": False, "choice": ""}
 
-    # 动态渲染函数（exam 模式下不显示答案）
-    hide = bool(exam)
-    _body_fn = lambda: _body_html(st, hide_answer=hide)
-    if exam:
-        _fb_fn = lambda: f"{_C}1;36m已作答{_RST}" if st.answered else ""
-        _help_fn = lambda: (" ↑↓ 选择 · Enter 确认 · q 交卷"
-                            if not st.answered else " ← 继续")
-    else:
-        _fb_fn = lambda: _feedback_html(st)
-        _help_fn = lambda: _helpbar_html(st)
+    img, _ = _split_img(q["stem"])
+    letters = list(_choices_dict(q).keys())
+    if not letters:
+        return result
 
-    kb = KeyBindings()
+    _clear_screen()
+    if img:
+        _render_image(img)         # 真彩图（顶部，保持不动）
 
-    @kb.add("up")
-    def _up(_event):
-        if not st.final_correct and st.choices_letters:
-            st.sel = (st.sel - 1) % len(st.choices_letters)
-        _event.app.invalidate()
+    sel = 0
+    answered = False
+    final_correct = False
+    first_wrong = False
+    _render_all(q, sel, answered, final_correct, first_wrong, exam)
 
-    @kb.add("down")
-    def _down(_event):
-        if not st.final_correct and st.choices_letters:
-            st.sel = (st.sel + 1) % len(st.choices_letters)
-        _event.app.invalidate()
-
-    @kb.add("q")
-    @kb.add("c-c")
-    def _quit(_event):
+    try:
+        _enter_raw()
+        while True:
+            key = _read_key()
+            if key == "up":
+                if not final_correct:
+                    sel = (sel - 1) % len(letters)
+                    _render_all(q, sel, answered, final_correct, first_wrong, exam)
+            elif key == "down":
+                if not final_correct:
+                    sel = (sel + 1) % len(letters)
+                    _render_all(q, sel, answered, final_correct, first_wrong, exam)
+            elif key == "q":
+                result["quit"] = True
+                break
+            elif key in ("\r", "\n"):
+                letter = letters[sel]
+                if not answered:
+                    if exam:
+                        result["choice"] = letter
+                        result["correct"] = (letter == q["answer"])
+                        break
+                    if letter == q["answer"]:
+                        final_correct = True
+                        answered = True
+                        result["correct"] = True
+                        _render_all(q, sel, answered, final_correct, first_wrong, exam)
+                        break
+                    else:
+                        first_wrong = True
+                        answered = True
+                        result["first_wrong"] = True
+                        _render_all(q, sel, answered, final_correct, first_wrong, exam)
+                else:
+                    # 重答
+                    if letter != q["answer"]:
+                        result["first_wrong"] = True
+                    result["correct"] = False
+                    break
+    except (KeyboardInterrupt, EOFError):
         result["quit"] = True
-        _event.app.exit()
-
-    @kb.add("enter")
-    def _enter(_event):
-        if not st.choices_letters:
-            _event.app.exit()
-            return
-        if not st.answered:
-            # 第一次作答
-            letter = st.choices_letters[st.sel]
-            if exam:
-                # 模拟考：记录选择，立即下一题（不显示答案/不重答）
-                result["choice"] = letter
-                result["correct"] = (letter == st.q["answer"])
-                _event.app.exit()
-                return
-            if letter == st.q["answer"]:
-                st.final_correct = True
-                st.answered = True
-                result["correct"] = True
-                _event.app.exit()          # 答对直接下一题
-            else:
-                st.first_wrong = True
-                st.answered = True         # 显示答错，进入重答
-                result["first_wrong"] = True
-                _event.app.invalidate()
-        else:
-            # 重答（已 answered 且是错的）
-            letter = st.choices_letters[st.sel]
-            if letter == st.q["answer"]:
-                result["correct"] = False   # 第一次错过，本题计错
-                result["first_wrong"] = True
-            _event.app.exit()               # 重答后无论对错都下一题
-        _event.app.invalidate()
-
-    body_control = FormattedTextControl(lambda: ANSI(_body_fn()))
-    fb_control = FormattedTextControl(lambda: ANSI(_fb_fn()))
-    help_control = FormattedTextControl(lambda: ANSI(_help_fn()))
-
-    layout = Layout(
-        HSplit([
-            Window(body_control, wrap_lines=True),
-            Window(height=1),
-            Window(fb_control, height=1),
-            Window(help_control, height=1, style="reverse"),
-        ])
-    )
-
-    style = Style([("reverse", "bg:#333333")])
-
-    app = Application(layout=layout, key_bindings=kb, full_screen=True, style=style)
-    app.run()
+    finally:
+        _exit_raw()
+        sys.stdout.write("\n\x1b[?25h")   # 恢复光标 + 换行
+        sys.stdout.flush()
     return result
