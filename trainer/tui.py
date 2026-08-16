@@ -328,22 +328,22 @@ def run_question(q, exam: bool = False, learn: bool = False, last: bool = False)
 
     def fmt_feedback() -> str:
         if learn:
-            tail = " · 已到最后一题" if last else ""
-            return f"{_OKBG}正确答案已高亮 ✓{_RST}{tail}"
+            tail = " · 已到最後一題" if last else ""
+            return f"{_OKBG}正確答案已高亮 ✓{_RST}{tail}"
         if not exam and answered:
-            return f"{_OKT}✓ 正确{_RST}" if final_correct else f"{_ERRBG}✗ 答错（请重答）{_RST}"
+            return f"{_OKT}✓ 正確{_RST}" if final_correct else f"{_ERRBG}✗ 答錯（請重答）{_RST}"
         if exam and answered:
             return f"{_TTL}已作答{_RST}"
         return ""
 
     def fmt_help() -> str:
         if learn:
-            return "Enter 下一题 · r 上一题 · q 退出"
+            return "Enter 下一題 · r 上一題 · q 退出"
         if exam:
-            return "↑↓ 选择 · Enter 确认 · q 交卷" if not answered else "← 继续"
+            return "↑↓ 選擇 · Enter 確認 · q 交卷" if not answered else "← 繼續"
         if answered and not final_correct:
-            return "↑↓ 选择重答选项 · Enter 确认 · q 退出（正确答案已高亮）"
-        return "↑↓ 选择 · Enter 确认 · q 退出"
+            return "↑↓ 選擇重答選項 · Enter 確認 · q 退出（正確答案已高亮）"
+        return "↑↓ 選擇 · Enter 確認 · q 退出"
 
     def paint_feedback():
         _erase_from(FEEDBACK_ROW)

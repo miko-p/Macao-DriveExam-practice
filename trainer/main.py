@@ -1,4 +1,4 @@
-"""M3 练习端：交互式 CLI 刷题（rich）。
+"""M3 練習端：互動式 CLI 刷題（rich）。
 
 用法：
   python -m trainer
@@ -6,17 +6,17 @@
   python -m trainer --mode random --count 20
 
 模式：
-  顺序 sequential  从题库按序
-  随机 random      随机抽题
-  错题 wrong       只练答错的题（错题本）
-  统计 stats       显示成绩/章节正确率
-  模拟考 exam      随机 N 题，交卷统一批改看总分
-（章节通过 --subject 指定）
+  順序 sequential  從題庫按序
+  隨機 random      隨機抽題
+  錯題 wrong       只練答錯的題（錯題本）
+  統計 stats       顯示成績/章節正確率
+  模擬考 exam      隨機 N 題，交卷統一改看總分
+（章節通過 --subject 指定）
 
-图片题：题干含 [img:相对路径] 标记。
-默认 --view-image auto：在 kitty 终端自动用 icat 真彩内嵌显示，
-否则仅提示本地路径。也可用 --view-image ascii(img2txt)、
-或指定查看器程序(如 viu/qview)。
+圖片題：題幹含 [img:相對路徑] 標記。
+預設 --view-image auto：在 kitty 終端自動用 icat 真彩內嵌顯示，
+否則僅提示本地路徑。也可用 --view-image ascii(img2txt)、
+或指定檢視器程式(如 viu/qview)。
 """
 from __future__ import annotations
 
@@ -80,14 +80,14 @@ def _show_image(path: str, viewer: str) -> None:
         try:
             subprocess.run(["img2txt", "-W", "50", "-H", "15", path])
         except FileNotFoundError:
-            console.print(f"[dim]img2txt 不可用，请手动查看: {path}[/dim]")
+            console.print(f"[dim]img2txt 不可用，請手動查看: {path}[/dim]")
         return
     # 外部查看器
     try:
         subprocess.Popen(viewer.split() + [path], stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL)
     except FileNotFoundError:
-        console.print(f"[dim]图片查看器不可用，请手动查看: {path}[/dim]")
+        console.print(f"[dim]圖片檢視器不可用，請手動查看: {path}[/dim]")
 
 
 def _kitty_icat(path: str) -> None:
@@ -95,13 +95,13 @@ def _kitty_icat(path: str) -> None:
     # 真实 kitty 交互终端里 /dev/tty 可用，icat 会把真彩图画进终端。
     # stdout/stderr 交给终端即可；文件缺失等硬错误再提示。
     if not Path(path).exists():
-        console.print(f"[dim]图片文件不存在: {path}[/dim]")
+        console.print(f"[dim]圖片檔案不存在: {path}[/dim]")
         return
     try:
         subprocess.run(
             ["kitty", "+kitten", "icat", "--transfer-mode=stream", path])
     except FileNotFoundError:
-        console.print(f"[dim]kitty+icat 不可用，请手动查看: {path}[/dim]")
+        console.print(f"[dim]kitty+icat 不可用，請手動查看: {path}[/dim]")
 
 
 def _print_question(q) -> None:
@@ -109,7 +109,7 @@ def _print_question(q) -> None:
     header = f"[bold cyan]{q['subject']}[/bold cyan] · {q['source_id']}"
     lines = [f"[bold]{stem}[/bold]"]
     if img:
-        lines.append(f"[dim](图片: {img})[/dim]")
+        lines.append(f"[dim](圖片: {img})[/dim]")
     lines.append("")
     import json
     for ch, txt in json.loads(q["choices"]).items():
@@ -144,12 +144,12 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str,
 
     # kitty 环境检查：刷题类模式依赖 kitty 真彩显示题目图片
     if mode != "stats" and not _in_kitty():
-        console.print("[bold yellow]⚠ 当前不在 kitty 终端。[/bold yellow]")
-        console.print("[yellow]本工具面向 kitty 终端设计：题目图片靠 kitty 真彩内嵌\n"
-                      "(kitty +kitten icat) 来显示交通标志。其他终端看不到标志图，\n"
-                      "仅给出图片路径，做题体验不完整。建议用 kitty 终端运行。[/yellow]")
+        console.print("[bold yellow]⚠ 目前不在 kitty 終端。[/bold yellow]")
+        console.print("[yellow]本工具面向 kitty 終端設計：題目圖片靠 kitty 真彩內嵌\n"
+                      "(kitty +kitten icat) 來顯示交通標誌。其他終端看不到標誌圖，\n"
+                      "僅給出圖片路徑，做題體驗不完整。建議用 kitty 終端執行。[/yellow]")
         if mode == "exam" or not viewer or viewer == "auto":
-            console.print("[dim]继续运行（图片题仅提示本地路径）。[/dim]\n")
+            console.print("[dim]繼續執行（圖片題僅提示本地路徑）。[/dim]\n")
 
     # 统计模式
     if mode == "stats":
@@ -186,25 +186,25 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str,
 
     if not questions:
         log.warning("无可用题目 mode=%s subject=%r", mode, subject)
-        console.print("[yellow]没有可练习的题。[/yellow]")
+        console.print("[yellow]沒有可練習的題。[/yellow]")
         if mode == "wrong":
-            console.print("[dim]错题重练需要先有答错的记录。[/dim]")
+            console.print("[dim]錯題重練需要先有答錯的記錄。[/dim]")
         else:
-            console.print("[red]题库为空，请确认 data/questions.db 已就绪。[/red]")
+            console.print("[red]題庫為空，請確認 data/questions.db 已就緒。[/red]")
         subj = subjects(conn)
         if subj:
-            console.print(f"现有章节: {', '.join(subj)}")
+            console.print(f"現有章節: {', '.join(subj)}")
         conn.close()
         sys.exit(1 if mode != "wrong" else 0)
 
     log.info("已抽题 %d 题 mode=%s", len(questions), mode)
 
-    console.print(f"[bold]开始{f'学习' if mode=='learn' else '练习'}[/bold] · {len(questions)} 题 · 模式 {mode}"
+    console.print(f"[bold]開始{f'學習' if mode=='learn' else '練習'}[/bold] · {len(questions)} 題 · 模式 {mode}"
                   + (f" · {subject}" if subject else ""))
     if mode == "learn":
-        console.print("[dim]Enter 下一题 · r 上一题 · q 退出 · 正确答案绿色高亮[/dim]\n")
+        console.print("[dim]Enter 下一題 · r 上一題 · q 退出 · 正確答案綠色高亮[/dim]\n")
     else:
-        console.print("[dim]↑↓ 选择选项 · Enter 确认 · q 退出 · 答错可重答一次[/dim]\n")
+        console.print("[dim]↑↓ 選擇選項 · Enter 確認 · q 退出 · 答錯可重答一次[/dim]\n")
 
     correct = 0
     try:
@@ -216,36 +216,36 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str,
             while 0 <= i < n:
                 res = run_question(questions[i], learn=True, last=(i == n - 1))
                 if res["quit"]:
-                    console.print("\n[dim]已退出学习[/dim]")
+                    console.print("\n[dim]已退出學習[/dim]")
                     break
                 if res["nav"] == "prev":
                     i = max(0, i - 1)
                 else:  # next
-                    if i == n - 1:      # 已到最后一题再按 next 结束
+                    if i == n - 1:      # 已到最後一題再按 next 結束
                         reached_end = True
                         break
                     i += 1
             if reached_end:
-                console.print("\n[dim]已到最后一题，学习结束[/dim]")
+                console.print("\n[dim]已到最後一題，學習結束[/dim]")
         else:
             for q in questions:
-                res = run_question(q)                  # 全屏箭头选择（含错题重答）
+                res = run_question(q)                  # 全屏箭頭選擇（含錯題重答）
                 if res["quit"]:
-                    console.print("\n[dim]已退出练习[/dim]")
+                    console.print("\n[dim]已退出練習[/dim]")
                     break
                 ok = 1 if res["correct"] else 0
                 _record(conn, q, ok, mode)
                 correct += ok
     except KeyboardInterrupt:
         log.info("练习被用户中断 mode=%s", mode)
-        console.print("\n[dim]中断中止[/dim]")
+        console.print("\n[dim]中斷中止[/dim]")
     except Exception:
         log.exception("练习执行异常 mode=%s", mode)
         raise
 
     log.info("练习结束 mode=%s 答对=%d/%d", mode, correct, len(questions))
     console.print(Panel(
-        f"[bold]完成: {len(questions)} 题, 答对 {correct} ({correct/len(questions)*100:.0f}%)[/bold]",
+        f"[bold]完成: {len(questions)} 題, 答對 {correct} ({correct/len(questions)*100:.0f}%)[/bold]",
         border_style="green"))
 
     conn.close()
@@ -260,26 +260,26 @@ def run_exam(conn, subject=None, count=None, viewer="auto") -> None:
         n = len(allq)
     questions = random.sample(list(allq), n)
     if not questions:
-        console.print("[yellow]题库为空，无法模拟考。[/yellow]")
+        console.print("[yellow]題庫為空，無法模擬考。[/yellow]")
         return
-    log.info("模拟考开始 subject=%r 题数=%d", subject, n)
+    log.info("模擬考開始 subject=%r 題數=%d", subject, n)
 
-    console.print(Panel(f"[bold]模拟考试[/bold] · {n} 题"
+    console.print(Panel(f"[bold]模擬考試[/bold] · {n} 題"
                         f"{' · '+subject if subject else ''}\n"
-                        "[dim]作答后不提示对错，交卷统一批改。[/dim]",
+                        "[dim]作答後不提示對錯，交卷統一改。[/dim]",
                         border_style="magenta"))
-    console.print("[dim]↑↓ 选择选项 · Enter 确认 · q 交卷 · 作答不显示答案[/dim]\n")
+    console.print("[dim]↑↓ 選擇選項 · Enter 確認 · q 交卷 · 作答不顯示答案[/dim]\n")
     answers: list[tuple] = []
     start = time.time()
     try:
         for q in questions:
-            res = run_question(q, exam=True)     # 全屏箭头选择，不显示答案
+            res = run_question(q, exam=True)     # 全屏箭頭選擇，不顯示答案
             if res["quit"]:
                 console.print("[dim]提前交卷[/dim]")
                 break
             answers.append((q, res["choice"]))
     except KeyboardInterrupt:
-        console.print("\n[dim]模拟考中断，按已答部分批改[/dim]")
+        console.print("\n[dim]模擬考中斷，按已答部分改[/dim]")
 
     elapsed = time.time() - start
     correct = sum(1 for q, a in answers if a == q["answer"])
@@ -290,21 +290,21 @@ def run_exam(conn, subject=None, count=None, viewer="auto") -> None:
     pct = (correct / total * 100) if total else 0
     log.info("模拟考结束 subject=%r 作答=%d 答对=%d 正确率=%.0f%%", subject, total, correct, pct)
     console.print(Panel(
-        f"[bold]交卷[/bold] · 作答 {total}/{n} 题 · 用时 {int(elapsed//60)}分{int(elapsed%60)}秒\n"
-        f"[bold]答对 {correct} 题，正确率 {pct:.0f}%[/bold]"
-        + (f"\n[dim]通过线 85%（参考正式考试）[/dim]" if pct < 85 else "\n[green]达到 85% 合格线 👍[/green]"),
+        f"[bold]交卷[/bold] · 作答 {total}/{n} 題 · 用時 {int(elapsed//60)}分{int(elapsed%60)}秒\n"
+        f"[bold]答對 {correct} 題，正確率 {pct:.0f}%[/bold]"
+        + (f"\n[dim]及格線 85%（參考正式考試）[/dim]" if pct < 85 else "\n[green]達到 85% 合格線 👍[/green]"),
         border_style="green" if pct >= 85 else "red"))
 
 
 def show_stats(conn, subject=None) -> None:
     """显示整体/分章节统计。"""
     s = overall_stats(conn, subject)
-    header = "成绩统计" + (f" · {subject}" if subject else " · 全部章节")
+    header = "成績統計" + (f" · {subject}" if subject else " · 全部章節")
     table = Table(title=header, expand=True)
-    table.add_column("题数", justify="right")
+    table.add_column("題數", justify="right")
     table.add_column("已作答", justify="right")
-    table.add_column("正确率", justify="right")
-    table.add_column("错题占比", justify="right")
+    table.add_column("正確率", justify="right")
+    table.add_column("錯題占比", justify="right")
     got = s["total"] - s["answered"]
     table.add_row(str(s["total"]), str(s["answered"]),
                   f"{s['correct_pct']}%" if s["correct_pct"] is not None else "—",
@@ -312,12 +312,12 @@ def show_stats(conn, subject=None) -> None:
     console.print(table)
 
     if not subject:
-        console.print("\n[bold]分章节统计[/bold]")
+        console.print("\n[bold]分章節統計[/bold]")
         subj_table = Table(expand=True)
-        subj_table.add_column("章节")
-        subj_table.add_column("题数", justify="right")
+        subj_table.add_column("章節")
+        subj_table.add_column("題數", justify="right")
         subj_table.add_column("已作答", justify="right")
-        subj_table.add_column("正确率", justify="right")
+        subj_table.add_column("正確率", justify="right")
         for row in stats_by_subject(conn):
             subj_table.add_row(
                 row["subject"], str(row["total"]), str(row["answered"]),
@@ -327,12 +327,12 @@ def show_stats(conn, subject=None) -> None:
 
 @click.command()
 @click.option("--subject", type=str, default=None,
-              help="章节（空=全部）")
+              help="章節（空=全部）")
 @click.option("--mode", type=click.Choice(["sequential", "random", "wrong", "stats", "exam"]),
-              default="sequential", help="练习模式")
-@click.option("--count", type=int, default=None, help="题数（默认全部）")
+              default="sequential", help="練習模式")
+@click.option("--count", type=int, default=None, help="題數（預設全部）")
 @click.option("--view-image", type=str, default="auto",
-              help="图片显示: auto(kitty真彩自动,默认)/kitty/ascii(img2txt)/外部程序")
+              help="圖片顯示: auto(kitty真彩自動,預設)/kitty/ascii(img2txt)/外部程式")
 def main(subject, mode, count, view_image):
     run(subject, mode, count, view_image)
 

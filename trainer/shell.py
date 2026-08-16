@@ -64,8 +64,8 @@ def _show_banner() -> None:
         console.print(cl)
         console.print("[bold cyan]──────────────────────────────[/bold cyan]")
 
-    console.print("[bold]在底部输入命令开始刷题[/bold] "
-                  "(输入主命令后按空格再 Tab 补子选项，help 查看全部命令)\n")
+    console.print("[bold]在底部輸入命令開始刷題[/bold] "
+                  "(輸入主命令後按空白鍵再 Tab 補子選項，help 查看全部命令)\n")
 
 
 def _get_modes_help() -> str:
@@ -73,25 +73,25 @@ def _get_modes_help() -> str:
 [bold cyan]MDrivePractice 命令[/bold cyan]
 
 [bold cyan]模式[/bold cyan]
-  start [N]               顺序刷 N 题（默认全部）
-  random [--count N]      随机抽 N 题（默认全部）
-  wrong [--count N]       错题重练 N 题
-  exam [--count N]        模拟考 N 题（默认40），统一批改
-  stats                   查看成绩统计
+  start [N]               順序刷 N 題（預設全部）
+  random [--count N]      隨機抽 N 題（預設全部）
+  wrong [--count N]       錯題重練 N 題
+  exam [--count N]        模擬考 N 題（預設40），統一改
+  stats                   查看成績統計
 
-[bold cyan]答题练习[/bold cyan]
-  practice book 1 [题号]   练习第一册（可指定题号开始）
-  practice book 2 [题号]   （1-5 册）
+[bold cyan]答題練習[/bold cyan]
+  practice book 1 [題號]   練習第一冊（可指定題號開始）
+  practice book 2 [題號]   （1-5 冊）
 
-[bold cyan]学习浏览[/bold cyan]
-  learn book 1 [题号]      浏览第一册：正确答案绿色高亮，
-                           Enter 下一题 · r 上一题
+[bold cyan]學習瀏覽[/bold cyan]
+  learn book 1 [題號]      瀏覽第一冊：正確答案綠色高亮，
+                           Enter 下一題 · r 上一題
 
 [bold cyan]其他[/bold cyan]
-  help                    显示帮助
-  clear                   重显标题
-  quit                    退出程序
-  edata 2026-08-18        考试倒计时：输入未来日期，大字显示剩余天数
+  help                    顯示幫助
+  clear                   重顯標題
+  quit                    退出程式
+  edata 2026-08-18        考試倒計時：輸入未來日期，大字顯示剩餘天數
 """
 
 
@@ -153,7 +153,7 @@ def _parse_command(raw: str):
             d = _parse_date(parts[1])
             if d:
                 return ("__edata__", parts[1], None, None)
-            return ("__edata_err__", "日期格式应为 YYYY-MM-DD，且需大于今天（如 2026-08-18）", None, None)
+            return ("__edata_err__", "日期格式應為 YYYY-MM-DD，且需大於今天（如 2026-08-18）", None, None)
         return ("__edata_err__", "用法：edata YYYY-MM-DD（如 edata 2026-08-18）", None, None)
 
     # 答题/学习：practice/learn book <册> [题号]（不能先做 count 提取，会误吞题号）
@@ -277,10 +277,10 @@ def _exam_countdown_line():
     days = (d - date.today()).days
     from rich.text import Text as _T
     t = _T()
-    t.append("  🗓  距离考试还有 ", style="bold")
+    t.append("  🗓  距離考試還有 ", style="bold")
     t.append(str(days), style="bold yellow")
     t.append(" 天", style="bold")
-    t.append(f"  （考试日 {d.isoformat()}）", style="dim")
+    t.append(f"  （考試日 {d.isoformat()}）", style="dim")
     return t
 
 
@@ -295,8 +295,8 @@ def _countdown_text(days: int, date_str: str | None = None):
     text = _T()
     text.append("\n")
     text.append("═" * min(bw, 56) + "\n\n", style="bold cyan")
-    text.append("距 离 考 试 还 有\n\n", style="bold")
-    # 大字数字（居中，黄底白字粗体突出）
+    text.append("距 離 考 試 還 有\n\n", style="bold")
+    # 大字數字（居中，黃底白字粗體突出）
     big = _big_num(days)
     for row in big:
         pad = max(0, (bw - len(row)) // 2)
@@ -306,7 +306,7 @@ def _countdown_text(days: int, date_str: str | None = None):
         text.append("\n")
     text.append("\n")
     if date_str:
-        text.append(f"  考试日期：{date_str}  ·  剩余 {days} 天\n", style="cyan")
+        text.append(f"  考試日期：{date_str}  ·  剩餘 {days} 天\n", style="cyan")
         text.append("＝" * min(bw, 56) + "\n", style="bold cyan")
     return text
 
@@ -319,7 +319,7 @@ def _show_countdown(date_str: str) -> None:
 
     _clear()
     t = _countdown_text(days, date_str)
-    t.append("\n按任意键返回命令界面…", style="dim")
+    t.append("\n按任意鍵返回命令介面…", style="dim")
     console.print(t)
 
     # 等待按键返回
@@ -351,20 +351,20 @@ def run_shell() -> None:
                 history=history,
                 style=None,
                 key_bindings=None,
-                bottom_toolbar="MDrivePractice · 输入命令刷题  |  Tab 补全 · quit 退出",
+                bottom_toolbar="MDrivePractice · 輸入命令刷題  |  Tab 補全 · quit 退出",
             )
         except (KeyboardInterrupt, EOFError):
-            console.print("\n[dim]再见！[/dim]")
+            console.print("\n[dim]再見！[/dim]")
             break
         except Exception:
-            log.exception("命令界面运行异常")
+            log.exception("命令界面運行異常")
             break
 
         cmd = _parse_command(raw)
         if cmd is None:
             if raw.strip():
                 log.info("未识别命令: %r", raw)
-                console.print("[yellow]未识别的命令，输入 [bold]help[/bold] 查看帮助。[/yellow]")
+                console.print("[yellow]未識別的命令，輸入 [bold]help[/bold] 查看幫助。[/yellow]")
             continue
 
         action, subject, count, start_qid = cmd
@@ -375,11 +375,11 @@ def run_shell() -> None:
             _show_banner()
             continue
         if action == "__quit__":
-            console.print("[bold green]✋ 再见，刷题愉快！[/bold green]")
+            console.print("[bold green]✋ 再見，刷題愉快！[/bold green]")
             break
         if action == "__edata__":
             ds = subject or ""
-            _save_exam_date(ds)               # 持久化考试日期，启动时在标题下显示
+            _save_exam_date(ds)               # 持久化考試日期，啟動時在標題下顯示
             _show_countdown(ds)
             _show_banner()
             continue
@@ -387,26 +387,26 @@ def run_shell() -> None:
             console.print(f"[yellow]{subject}[/yellow]")
             continue
 
-        # stats 简单输出：不清屏、直接空一行显示统计，保留命令界面上下文
+        # stats 簡單輸出：不清屏、直接空一行顯示統計，保留命令介面上下文
         if action == "stats":
             console.print("")
             run(subject=None, mode="stats", count=None, viewer="auto")
             console.print("")
             continue
 
-        # 进入模式：先清屏
+        # 進入模式：先清屏
         _clear()
-        log.info("执行命令 action=%s subject=%r count=%r start_qid=%r", action, subject, count, start_qid)
+        log.info("執行命令 action=%s subject=%r count=%r start_qid=%r", action, subject, count, start_qid)
         try:
             run(subject=subject, mode=action, count=count,
                 start_qid=start_qid, viewer="auto")
         except SystemExit:
             pass
         except Exception:
-            log.exception("模式执行异常 action=%s", action)
-        # 刷题结束返回命令界面
+            log.exception("模式執行異常 action=%s", action)
+        # 刷題結束返回命令介面
         console.print("\n[bold cyan]┌──────────────────────────────────┐[/bold cyan]")
-        console.print("[bold cyan]│ 已完成本次练习，返回命令界面     │[/bold cyan]")
+        console.print("[bold cyan]│ 已完成本次練習，返回命令介面     │[/bold cyan]")
         console.print("[bold cyan]└──────────────────────────────────┘[/bold cyan]")
         _show_banner()
 
