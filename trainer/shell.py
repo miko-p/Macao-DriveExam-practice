@@ -354,6 +354,8 @@ def run_shell() -> None:
                 bottom_toolbar="MDrivePractice · 輸入命令刷題  |  Tab 補全 · quit 退出",
             )
         except (KeyboardInterrupt, EOFError):
+            console.print("\n[bold yellow]退出前的最後統計：[/bold yellow]")
+            run(subject=None, mode="stats", count=None, viewer="auto")
             console.print("\n[dim]再見！[/dim]")
             break
         except Exception:
@@ -375,7 +377,9 @@ def run_shell() -> None:
             _show_banner()
             continue
         if action == "__quit__":
-            console.print("[bold green]✋ 再見，刷題愉快！[/bold green]")
+            console.print("\n[bold yellow]退出前的最後統計：[/bold yellow]")
+            run(subject=None, mode="stats", count=None, viewer="auto")
+            console.print("\n[bold green]✋ 再見，刷題愉快！[/bold green]")
             break
         if action == "__edata__":
             ds = subject or ""
