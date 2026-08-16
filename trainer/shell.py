@@ -19,9 +19,11 @@ from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings
 
 from trainer.main import run, Console  # noqa: F401
+from trainer.logger import get_logger
 from config import IMAGE_DIR
 
 console = Console()
+log = get_logger("shell")
 
 # 命令集（含常用的中文别名和选项，用于 fuzzy 补全）
 COMMANDS = [
@@ -174,6 +176,7 @@ def _normalize_book(s: str) -> Optional[str]:
 
 def run_shell() -> None:
     """启动交互式命令界面。"""
+    log.info("MDrivePractice 命令界面启动")
     _show_banner()
     history = InMemoryHistory()
     completer = _make_completer()
@@ -191,10 +194,14 @@ def run_shell() -> None:
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]再见！[/dim]")
             break
+        except Exception:
+            log.exception("命令界面运行异常")
+            break
 
         cmd = _parse_command(raw)
         if cmd is None:
             if raw.strip():
+                log.info("未识别命令: %r", raw)
                 console.print("[yellow]未识别的命令，输入 [bold]help[/bold] 查看帮助。[/yellow]")
             continue
 
@@ -218,11 +225,14 @@ def run_shell() -> None:
 
         # 进入模式：先清屏
         _clear()
+        log.info("执行命令 action=%s subject=%r count=%r start_qid=%r", action, subject, count, start_qid)
         try:
             run(subject=subject, mode=action, count=count,
                 start_qid=start_qid, viewer="auto")
         except SystemExit:
             pass
+        except Exception:
+            log.exception("模式执行异常 action=%s", action)
         # 刷题结束返回命令界面
         console.print("\n[bold cyan]┌──────────────────────────────────┐[/bold cyan]")
         console.print("[bold cyan]│ 已完成本次练习，返回命令界面     │[/bold cyan]")

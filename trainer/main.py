@@ -38,8 +38,10 @@ from database.store import (connect, init_db, get_questions_with_stats,
                             get_wrong_questions, overall_stats,
                             stats_by_subject, subjects)
 from trainer.tui import run_question
+from trainer.logger import get_logger
 
 console = Console()
+log = get_logger("main")
 
 
 def _split_img(text: str) -> tuple[str | None, str]:
@@ -137,6 +139,8 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str,
         start_qid: int | None = None) -> None:
     conn = connect()
     init_db(conn)
+    log.info("练习开始 mode=%s subject=%r count=%r start_qid=%r",
+             mode, subject, count, start_qid)
 
     # kitty 环境检查：刷题类模式依赖 kitty 真彩显示题目图片
     if mode != "stats" and not _in_kitty():
@@ -181,6 +185,7 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str,
             questions = questions[:count]
 
     if not questions:
+        log.warning("无可用题目 mode=%s subject=%r", mode, subject)
         console.print("[yellow]没有可练习的题。[/yellow]")
         if mode == "wrong":
             console.print("[dim]错题重练需要先有答错的记录。[/dim]")
@@ -191,6 +196,8 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str,
             console.print(f"现有章节: {', '.join(subj)}")
         conn.close()
         sys.exit(1 if mode != "wrong" else 0)
+
+    log.info("已抽题 %d 题 mode=%s", len(questions), mode)
 
     console.print(f"[bold]开始{f'学习' if mode=='learn' else '练习'}[/bold] · {len(questions)} 题 · 模式 {mode}"
                   + (f" · {subject}" if subject else ""))
@@ -230,8 +237,13 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str,
                 _record(conn, q, ok, mode)
                 correct += ok
     except KeyboardInterrupt:
+        log.info("练习被用户中断 mode=%s", mode)
         console.print("\n[dim]中断中止[/dim]")
+    except Exception:
+        log.exception("练习执行异常 mode=%s", mode)
+        raise
 
+    log.info("练习结束 mode=%s 答对=%d/%d", mode, correct, len(questions))
     console.print(Panel(
         f"[bold]完成: {len(questions)} 题, 答对 {correct} ({correct/len(questions)*100:.0f}%)[/bold]",
         border_style="green"))
@@ -250,6 +262,7 @@ def run_exam(conn, subject=None, count=None, viewer="auto") -> None:
     if not questions:
         console.print("[yellow]题库为空，无法模拟考。[/yellow]")
         return
+    log.info("模拟考开始 subject=%r 题数=%d", subject, n)
 
     console.print(Panel(f"[bold]模拟考试[/bold] · {n} 题"
                         f"{' · '+subject if subject else ''}\n"
@@ -275,6 +288,7 @@ def run_exam(conn, subject=None, count=None, viewer="auto") -> None:
     for q, a in answers:
         _record(conn, q, 1 if a == q["answer"] else 0, "exam")
     pct = (correct / total * 100) if total else 0
+    log.info("模拟考结束 subject=%r 作答=%d 答对=%d 正确率=%.0f%%", subject, total, correct, pct)
     console.print(Panel(
         f"[bold]交卷[/bold] · 作答 {total}/{n} 题 · 用时 {int(elapsed//60)}分{int(elapsed%60)}秒\n"
         f"[bold]答对 {correct} 题，正确率 {pct:.0f}%[/bold]"

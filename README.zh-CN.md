@@ -99,9 +99,9 @@ python -m trainer.main --mode stats             # 成绩统计
 ## 🧱 目录结构
 
 ```
-trainer/    交互练习端（shell.py 命令界面 + tui.py 全屏刷题 + main.py 核心）
+trainer/    交互练习端（shell.py 命令界面 + tui.py 全屏刷题 + main.py 核心 + logger.py 日志）
 database/   SQLite 数据访问层（schema.sql + store.py）
-data/       题库 questions.db + 题目图片 images/（随项目发布）
+data/       题库 questions.db + 题目图片 images/ + 日志 logs/（随项目发布）
 doc/        进度文档
 ```
 
@@ -123,9 +123,15 @@ end
 - 图片：`data/images/`（242 幅，随项目发布）。
 - 正确率、错题本、分章节统计均基于 `practice_log` 作答流水。
 
+## 📝 日志
+
+运行时的信息、警告与错误会写入 `data/logs/drive_practice.log`（自动创建）。若遇到异常，可将该文件内容提供出来，有助于排查。放大后的图片缓存位于 `data/images_cache/`（可删除重建）。
+
 ## 🧭 进度
 
 - 架构：`BLUEPRINT.md`
+- 更新记录：`CHANGELOG.md`
+- 授权：`LICENSE`（MIT）
 - 阶段记录：`doc/`
 
 ---

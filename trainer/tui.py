@@ -14,6 +14,9 @@ import sys
 from pathlib import Path
 
 from config import ROOT, IMAGE_CACHE_DIR
+from trainer.logger import get_logger
+
+log = get_logger("tui")
 
 DISPLAY_H = 60          # 内容区总高（估算）
 
@@ -105,7 +108,7 @@ def _enlarge(path: str, target_px: int) -> str:
         if r.returncode == 0 and cache.exists() and cache.stat().st_size > 0:
             return str(cache)
     except Exception:
-        pass
+        log.warning("图片放大失败, 回退原图 path=%s", path)
     return path
 
 
@@ -126,6 +129,7 @@ def _render_img_centered(path: str, height: int = IMG_H) -> int:
              "--place", f"{img_w}x{h}@{left}x1", str(big)],
             check=False)
     except FileNotFoundError:
+        log.warning("kitty icat 不可用, 跳过图片渲染 path=%s", path)
         return 0
     return h
 

@@ -100,9 +100,9 @@ python -m trainer.main --mode stats             # 成績統計
 ## 🧱 目錄結構
 
 ```
-trainer/    互動練習端（shell.py 命令介面 + tui.py 全螢幕刷題 + main.py 核心）
+trainer/    互動練習端（shell.py 命令介面 + tui.py 全螢幕刷題 + main.py 核心 + logger.py 日誌）
 database/   SQLite 資料存取層（schema.sql + store.py）
-data/       題庫 questions.db + 題目圖片 images/（隨專案發佈）
+data/       題庫 questions.db + 題目圖片 images/ + 日誌 logs/（隨專案發佈）
 doc/        進度文件
 ```
 
@@ -124,9 +124,15 @@ end
 - 圖片：`data/images/`（242 幅，隨專案發佈）。
 - 正確率、錯題本、分章節統計均基於 `practice_log` 作答流水。
 
+## 📝 日誌
+
+運行時的資訊、警告與錯誤會寫入 `data/logs/drive_practice.log`（自動建立）。若遇到異常，可將該檔案內容提供出來，有助於排查。放大後的圖片快取在 `data/images_cache/`（可刪除重建）。
+
 ## 🧭 進度
 
 - 架構：`BLUEPRINT.md`
+- 更新紀錄：`CHANGELOG.md`
+- 授權：`LICENSE`（MIT）
 - 階段記錄：`doc/`
 
 ---
