@@ -195,14 +195,14 @@ def run(subject: str | None, mode: str, count: int | None, viewer: str,
     console.print(f"[bold]开始{f'学习' if mode=='learn' else '练习'}[/bold] · {len(questions)} 题 · 模式 {mode}"
                   + (f" · {subject}" if subject else ""))
     if mode == "learn":
-        console.print("[dim]Enter 下一题 · Ctrl+Enter 上一题 · q 退出 · 正确答案绿色高亮[/dim]\n")
+        console.print("[dim]Enter 下一题 · r 上一题 · q 退出 · 正确答案绿色高亮[/dim]\n")
     else:
         console.print("[dim]↑↓ 选择选项 · Enter 确认 · q 退出 · 答错可重答一次[/dim]\n")
 
     correct = 0
     try:
         if mode == "learn":
-            # 学习模式：enter 下一 / ctrl+enter 上一
+            # 学习模式：enter 下一 / r 上一
             i = 0
             n = len(questions)
             while 0 <= i < n:

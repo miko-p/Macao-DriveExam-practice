@@ -160,8 +160,8 @@ def _exit_raw():
 
 def _read_key() -> str:
     """读取一个按键。
-    返回: up/down/left/right/enter/ctrl+enter/esc/q 或字符。
-    支持 CSI u (kitty键盘协议) 用于 Ctrl+Enter。
+    返回: up/down/left/right/enter/esc 或字符。
+    兼容 CSI u / SS3 箭头序列。
     """
     ch = sys.stdin.read(1)
     if ch == "\x1b":
@@ -193,7 +193,7 @@ def _read_key() -> str:
 def run_question(q, exam: bool = False, learn: bool = False) -> dict:
     """运行一题。
     练习(exam=False,learn=False): 箭头选择+错题重答。
-    学习(learn=True): 正确项绿色背景高亮, Enter下一题, Ctrl+Enter上一题。
+    学习(learn=True): 正确项绿色背景高亮, Enter下一题, r上一题。
     返回 {correct, first_wrong, quit, choice, nav} (nav: next/prev, learn模式)。
     """
     result = {"correct": False, "first_wrong": False, "quit": False,
@@ -294,7 +294,7 @@ def run_question(q, exam: bool = False, learn: bool = False) -> dict:
 
     def fmt_help() -> str:
         if learn:
-            return "Enter 下一题 · Ctrl+Enter 上一题 · q 退出"
+            return "Enter 下一题 · r 上一题 · q 退出"
         if exam:
             return "↑↓ 选择 · Enter 确认 · q 交卷" if not answered else "← 继续"
         if answered and not final_correct:
@@ -311,7 +311,7 @@ def run_question(q, exam: bool = False, learn: bool = False) -> dict:
 
     paint_feedback()
     if learn:
-        # 学习模式：无箭头，Enter 下一题 / Ctrl+Enter 上一题 / q 退出
+        # 学习模式：无箭头，Enter 下一题 / r 上一题 / q 退出
         try:
             _enter_raw()
             while True:
@@ -319,10 +319,10 @@ def run_question(q, exam: bool = False, learn: bool = False) -> dict:
                 if key in ("\r", "\n"):
                     result["nav"] = "next"
                     break
-                elif key == "ctrl+enter":
+                elif key == "r":
                     result["nav"] = "prev"
                     break
-                elif key == "q":
+                elif key == "q" or key == "\x03":
                     result["quit"] = True
                     break
         except (KeyboardInterrupt, EOFError):

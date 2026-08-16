@@ -83,7 +83,7 @@ def _get_modes_help() -> str:
 
 [bold cyan]学习浏览[/bold cyan]
   learn book 1 [题号]      浏览第一册：正确答案绿色高亮，
-                           Enter 下一题 · Ctrl+Enter 上一题
+                           Enter 下一题 · r 上一题
 
 [bold cyan]其他[/bold cyan]
   help                    显示帮助
