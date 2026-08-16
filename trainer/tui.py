@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from config import ROOT
+from config import ROOT, IMAGE_CACHE_DIR
 
 DISPLAY_H = 60          # 内容区总高（估算）
 
@@ -78,21 +78,32 @@ def _term_height() -> int:
 
 
 def _enlarge(path: str, target_px: int) -> str:
-    """用 ImageMagick convert 把源图插值放大到 target_px 宽(保宽高比)，返回临时文件。
-    放大后 icat 显示更大更清晰，避免小源图直接拉伸过糊。失败则返回原路径。"""
+    """把源图插值放大到 target_px 宽并**缓存**到 data/images_cache/。
+
+    命中缓存直接复用（免重复 convert），源图变更才重新生成。返回缓存文件路径。
+    """
+    if not path or not Path(path).exists():
+        return path
     try:
-        import tempfile
-        fd, tmp = tempfile.mkstemp(suffix=".png")
-        os.close(fd)
-        # lanczos 高质量插值；-resize 保持宽高比 (只给宽度，高自动)
+        IMAGE_CACHE_DIR.mkdir(exist_ok=True)
+        stem = Path(path).stem
+        cache = IMAGE_CACHE_DIR / f"{stem}_{target_px}.png"
+        # 命中缓存 & 源图没变 → 直接返回
+        if cache.exists():
+            if not hasattr(cache, "stat"):
+                return str(cache)
+            try:
+                if Path(path).stat().st_mtime <= cache.stat().st_mtime:
+                    return str(cache)
+            except OSError:
+                return str(cache)
+        # 生成缓存（lanczos 高质量插值，保持宽高比）
         r = subprocess.run(
             ["convert", path, "-resize", f"{target_px}x{target_px}",
-             "-filter", "lanczos", "+repage", tmp],
+             "-filter", "lanczos", "+repage", str(cache)],
             capture_output=True)
-        if r.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 0:
-            return tmp
-        if os.path.exists(tmp):
-            os.unlink(tmp)
+        if r.returncode == 0 and cache.exists() and cache.stat().st_size > 0:
+            return str(cache)
     except Exception:
         pass
     return path
@@ -116,12 +127,6 @@ def _render_img_centered(path: str, height: int = IMG_H) -> int:
             check=False)
     except FileNotFoundError:
         return 0
-    finally:
-        if big != path and Path(big).exists():
-            try:
-                os.unlink(big)
-            except OSError:
-                pass
     return h
 
 

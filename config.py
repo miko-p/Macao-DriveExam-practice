@@ -9,9 +9,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 IMAGE_DIR = DATA_DIR / "images"            # 题目图片
+IMAGE_CACHE_DIR = DATA_DIR / "images_cache"  # 放大后图片缓存
 DB_PATH = DATA_DIR / "questions.db"        # 题库数据库
 
 
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(exist_ok=True)
     IMAGE_DIR.mkdir(exist_ok=True)
+    IMAGE_CACHE_DIR.mkdir(exist_ok=True)
