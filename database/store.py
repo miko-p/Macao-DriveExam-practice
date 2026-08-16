@@ -103,22 +103,23 @@ def get_wrong_questions(conn: sqlite3.Connection, subject: str | None = None,
 
 def overall_stats(conn: sqlite3.Connection, subject: str | None = None) -> dict:
     """整体统计：题数、作答次数、正确率、错题数，按章节汇总。"""
-    where, args = "", ()
+    cond, args = "", ()
     if subject:
-        where, args = " WHERE q.subject=?", (subject,)
-    total = conn.execute(f"SELECT COUNT(*) c FROM questions q{where}", args).fetchone()["c"]
+        cond, args = " WHERE q.subject=?", (subject,)
+    total = conn.execute(
+        "SELECT COUNT(*) c FROM questions q" + cond, args).fetchone()["c"]
     answered = conn.execute(
-        f"""SELECT COUNT(DISTINCT l.qid) c FROM practice_log l
-            JOIN questions q ON q.id=l.qid {where}""", args).fetchone()["c"]
+        "SELECT COUNT(DISTINCT l.qid) c FROM practice_log l "
+        "JOIN questions q ON q.id=l.qid" + cond, args).fetchone()["c"]
     correct_pct = conn.execute(
-        f"""SELECT CASE WHEN COUNT(*)=0 THEN NULL ELSE
-            ROUND(100.0*SUM(l.correct)/COUNT(*),1) END v
-            FROM practice_log l JOIN questions q ON q.id=l.qid {where}""",
+        "SELECT CASE WHEN COUNT(*)=0 THEN NULL ELSE "
+        "ROUND(100.0*SUM(l.correct)/COUNT(*),1) END v "
+        "FROM practice_log l JOIN questions q ON q.id=l.qid" + cond,
         args).fetchone()["v"]
     wrong_pct = conn.execute(
-        f"""SELECT CASE WHEN COUNT(*)=0 THEN NULL ELSE
-            ROUND(100.0*SUM(1-l.correct)/COUNT(*),1) END v
-            FROM practice_log l JOIN questions q ON q.id=l.qid {where}""",
+        "SELECT CASE WHEN COUNT(*)=0 THEN NULL ELSE "
+        "ROUND(100.0*SUM(1-l.correct)/COUNT(*),1) END v "
+        "FROM practice_log l JOIN questions q ON q.id=l.qid" + cond,
         args).fetchone()["v"]
     return {"total": total, "answered": answered,
             "correct_pct": correct_pct, "wrong_pct": wrong_pct}
