@@ -69,18 +69,27 @@ def _term_width() -> int:
 
 # ---------- 图片（居中渲染一次） ----------
 
-def _render_img_centered(path: str) -> None:
+def _term_height() -> int:
+    try:
+        return shutil.get_terminal_size().lines or 40
+    except Exception:
+        return 40
+
+
+def _render_img_centered(path: str, height: int = IMG_H) -> int:
+    """居中渲染真彩图片，返回实际占行数 height。"""
     if not path or not Path(path).exists():
-        return
+        return 0
     tw = _term_width()
     left = max(1, (tw - IMG_W) // 2)   # 水平居中
     try:
         subprocess.run(
             ["kitty", "+kitten", "icat", "--transfer-mode=stream",
-             "--place", f"{IMG_W}x{IMG_H}@{left}x1", str(path)],
+             "--place", f"{IMG_W}x{min(height, IMG_H)}@{left}x1", str(path)],
             check=False)
     except FileNotFoundError:
-        pass
+        return 0
+    return min(height, IMG_H)
 
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -167,15 +176,18 @@ def run_question(q, exam: bool = False) -> dict:
         return result
 
     tw = _term_width()
+    th = _term_height()
     ROW_GAP = 1                     # 选项项之间的空行数（行距）
     box_w = tw                      # 横线占满整行
     txt_w = tw - 2                  # 文本区宽度（略留边）
     correct = q["answer"] or ""
     _, stem = _split_img(q["stem"])
 
+    # 动态图片高度：确保整页(图片+题目区+选项区+反馈/帮助)不超过终端高度
+    fixed_rows = 4 + (len(letters) * (1 + ROW_GAP) + 1) + 2   # 题目区4 + 选项区(含横线) + 反馈+帮助
+    eff_img_h = max(4, min(IMG_H, th - fixed_rows - 2))
     # 布局位置记录
-    # 图片区: 1..IMG_H
-    TITLE_TOP = IMG_H + 2
+    TITLE_TOP = eff_img_h + 2
 
     def draw_frames():
         """画题目横线+选项横线（横线满宽）。返回每个选项的行号。"""
@@ -222,7 +234,7 @@ def run_question(q, exam: bool = False) -> dict:
 
     _clear_scr()
     if img and _in_kitty():
-        _render_img_centered(img)
+        _render_img_centered(img, eff_img_h)
 
     rowa, after_opt = draw_frames()
     # 反馈/帮助行（选项区之后）
